@@ -1,0 +1,11 @@
+# Default is to keep crlf line endings
+text=auto
+
+README.md eol=crlf
+*.DOC eof=crlf
+*.Z80 eol=crlf
+*.COM binary
+*.lbr binary
+*.for eof=crlf
+*.toc eof=crlf
+

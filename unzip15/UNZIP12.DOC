@@ -1,0 +1,30 @@
+UNZIP
+=====
+
+A small, lean and mean CP/M unzipper. This only has two modes of operation:
+
+A>UNZIP FOO
+
+will check the CRC for all files in foo.zip, but it does not extract.
+
+A>UNZIP FOO E
+
+will extract all files from foo.zip - there is no selective extract. Note
+that UNZIP assumes a .ZIP extension, and adds one if it is not present.
+
+Source is provided, hack on it if you feel like it. Nice things to add would
+be a selective extract, a list option that uses the compressed size (cs:)
+field to seek through the file without having to read it all, and maybe a
+print to screen or printer option. User number support wouldn't go too far
+astray either.
+
+		dg 7-3-90
+
+UUCP:		.....!harvard!xait!pallio!dg
+Internet:	dg%pallio.uucp@xait.xerox.com
+GEnie:		D.GOODENOUGH
+Q-link:		Delta G
+BBS's		David Goodenough on all
+
+	(617) 825-3135
+	(617) 965-7046
