@@ -57,6 +57,11 @@ zsm4 =unzip151.z80
 link unzip151
 ```
 
+A new library file (without compressed entries) containing the fixes
+is _unzip151.lbr_ and can be downloaded from
+
+https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip151.lbr
+
 Notes
 -----
 
