@@ -4,8 +4,10 @@ UNZIP for CP/M Z80
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
-It can _only_ be used to unpack ZIP files created by PKZip for MS-DOS
-Version 1.x.
+It can _only_ be used to unpack ZIP files whose contents have been
+compressed by PKZip for MS-DOS Version 1.x.
+
+Files Stored without compression can always be extracted.
 
 It DOES NOT support the memory-intensive Deflate algorithm implemented
 by PKzip 2.04g and Info-ZIP (the open-source version of ZIP that's
@@ -35,7 +37,7 @@ routines in the comp.os.cpm USENET group that fix two long outstanding
 bugs (1-Jun-2020 and 15-Jun-2020).
 
 I've incorporated Martin's fixes into a new sourcefile *UNZIP151.Z80*
-and also updated the original sourecode for Version 1.2 into a renamed
+and also updated the original sourcecode for Version 1.2 into a renamed
 file *UNZIP121.Z80*
 
 For a discussion of the fixes - please refer to the following
