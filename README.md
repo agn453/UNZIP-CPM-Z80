@@ -9,7 +9,7 @@ Version 1.x.
 
 It DOES NOT support the memory-intensive Deflate algorithm implemented
 by PKzip 2.04g and Info-ZIP (the open-source version of ZIP that's
-used by Unix/Linux and included wih Microsoft Windows and macOS).
+used by Unix/Linux and included with Microsoft Windows and macOS).
 
 
 Background
