@@ -1,5 +1,24 @@
 ; UNZIP.Z80
 ;
+; Version 1.2-1 -- June 17, 2020 -- Martin
+;
+; In postings to the USENET newsgroup comp.os.cpm, flaws in both
+; the un-implode and un-shrink routines have been reported and
+; fixed.
+;
+; For un-implode, the algorithm is essentially a translation
+; of the PKZ101 MS-DOS algorithm in C that has been hand-optimized
+; into Z80 assemble language.  However, the readtree() function
+; was incorrectly returning a buye value in the A register, when
+; the shift routine at label ui5 was expecting a 16-bit value in HL.
+;
+; For un-shrink, these was a race condition with the handling of the
+; "KwKwK" case that was omitted from the routine.
+;
+; Both updates are flagged with ;;v1.2-1 comments, and the version
+; sign-on message now includes this revision number.
+
+
 ; Version 1.2 -- July 3, 1990 -- David P. Goodenough
 ;
 ; This file has been converted to assemble with SLR's Z80ASM, resulting
@@ -26,7 +45,7 @@ init_bits	equ	9
 hsize	equ	8192
 first_ent	equ	257
 clear	equ	256
-maxcmax	equ	1 << max_bits
+maxcmax	equ	1 shl max_bits
 
 maxSF	equ	256
 
@@ -48,7 +67,7 @@ usage:	db	'Usage: UNZIP ZIPFILE [E]',CR,LF
 	db	'    default is to just list files',CR,LF,0,CtrlZ
 start:	ld	sp,(6)		; set the stack pointer
 	call	ilprt
-	db	'UNZIP  V1.2 - DPG  1990',CR,LF,LF,0
+	db	'UNZIP V1.2-1 - DPG 1990',CR,LF,LF,0	;;v1.2-1
 	ld	a,(5dh)		; filename?
 	cp	' '
 	jr	nz,wasfil
@@ -62,7 +81,7 @@ wasfil:	ld	a,(6dh)		; option letter?
 	ld	a,(65h)
 	cp	20h
 	jr	nz,wasext
-	ld	hl,['I' << 8] + 'Z'
+	ld	hl,'Z' + ('I' shl 8)	;;v1.2-1 'IZ' in HL
 	ld	(65h),hl
 	ld	a,'P'
 	ld	(67h),a	; install .ZIP extent
@@ -78,7 +97,7 @@ sigerr:	call	ilprt
 	db	'Bad signature in ZIP file',CR,LF,0
 	rst	0
 openok:	call	getword
-	ld	de,-[['K' << 8] + 'P']
+	ld	de,-(('K' shl 8) + 'P')
 	add	hl,de
 	ld	a,h
 	or	l
@@ -276,7 +295,7 @@ noflsh:	ld	de,opfcb
 nocls:	ld	hl,crc32
 	ld	de,crc
 	scf
-	ld	bc,4 << 8
+	ld	bc,4 shl 8
 crcclp:	ld	a,(de)
 	adc	a,(hl)
 	push	af
@@ -560,7 +579,7 @@ noxor:	djnz	crclp
 unshrink:
 	ld	a,init_bits
 	ld	(codesize),a
-	ld	hl,[1 << init_bits] - 1;
+	ld	hl,-1 + (1 shl init_bits)
 	ld	(maxcode),hl
 	ld	hl,first_ent
 	ld	(free_ent),hl
@@ -616,7 +635,8 @@ maxclp:	add	hl,hl
 	dec	hl
 atmax:	ld	(maxcode),hl
 	jr	clrlp
-noclr:	ld	(incode),hl
+;
+noclr:	ld	(incode),hl	;;v1.2-1 start unshrink fix
 	add	hl,hl
 	ld	de,prefix_of
 	add	hl,de
@@ -630,14 +650,28 @@ noclr:	ld	(incode),hl
 	call	savstk
 	ld	hl,(oldcode)
 noKwKw:	ex	de,hl
-staklp: ld	hl,suffix_of
-	add	hl,de
-	ld	a,(hl)
-	call	savstk
-	ld	hl,100h
+;
+staklp:	ld	hl,100h
 	or	a
 	sbc	hl,de
 	jr	nc,unstak
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	and	(hl)
+	inc	a
+	jr	nz,noKw2
+	ld	a,(finchar)
+	call	savstk
+	ld	de,(oldcode)
+	jr	staklp
+;
+noKw2:	ld	hl,suffix_of
+	add	hl,de
+	ld	a,(hl)
+	call	savstk
 	ld	hl,prefix_of
 	add	hl,de
 	add	hl,de
@@ -645,7 +679,12 @@ staklp: ld	hl,suffix_of
 	inc	hl
 	ld	d,(hl)
 	jr	staklp
-unstak:	ld	(finchar),a
+;
+unstak:	ld	hl,suffix_of
+	add	hl,de
+	ld	a,(hl)
+	call	savstk
+	ld	(finchar),a	;;v1.2-1 end of unshrink fix
 	ld	de,(stackp)
 unslp:	ld	hl,stack + 8192
 	or	a
@@ -1275,6 +1314,8 @@ ui2:	ld	a,(dictb)
 	push	hl
 	ld	ix,dist_tre
 	call	readtree
+	ld	l,a		;; v1.2-1 unimplode fix
+	ld	h,0		;; v1.2-1
 	ld	bc,(dictb - 1)
 ui5:	add	hl,hl
 	djnz	ui5
@@ -1432,8 +1473,10 @@ len_tree:
 dist_tre:
 	ds	_sf_tree_
 
-	ds	16384 + 2 - [3 * _sf_tree_]
+	ds	16384 + 2 - (3 * _sf_tree_)
 
 followers:
 stack:
 	ds	16384
+
+	end

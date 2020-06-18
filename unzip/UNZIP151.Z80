@@ -122,7 +122,7 @@ start:	ld	(oldstk),sp	; save old stack here for future use
 	call	ilprt
 	db	'UNZIP  Version '
 	db	Vers/10+'0','.',Vers mod 10+'0'
-	db	'-',Revisn mod 10+'0'	;; v1.5-1 identify revision
+	db	'-',Revisn mod 10+'0'	;;v1.5-1 identify revision
 	db	' - DPG',CR,LF,0
 	ld	a,(infcb+1)	; filename?
 	cp	' '
@@ -762,7 +762,7 @@ maxclp:	add	hl,hl
 atmax:	ld	(maxcode),hl
 	jr	clrlp
 ;
-noclr:	ld	(incode),hl		;;v1.5-1 start unshrink fix
+noclr:	ld	(incode),hl	;;v1.5-1 start unshrink fix
 	add	hl,hl
 	ld	de,prefix_of
 	add	hl,de
@@ -810,7 +810,7 @@ unstak:	ld	hl,suffix_of
 	add	hl,de
 	ld	a,(hl)
 	call	savstk
-	ld	(finchar),a		;;v1.5-1 end of unshrink fix
+	ld	(finchar),a	;;v1.5-1 end of unshrink fix
 	ld	de,(stackp)
 unslp:	ld	hl,stack + 8192
 	or	a
@@ -1445,8 +1445,8 @@ ui2:	ld	a,(dictb)
 	push	hl
 	ld	ix,dist_tre
 	call	readtree
-	ld	l,a		;; v1.5-1 unimplode fix
-	ld	h,0		;; v1.5-1
+	ld	l,a		;;v1.5-1 unimplode fix
+	ld	h,0		;;v1.5-1
 	ld	bc,(dictb - 1)
 ui5:	add	hl,hl
 	djnz	ui5

@@ -8,7 +8,7 @@ The files have been extracted from the distribution archive
 UNZIP15.LBR from the Public Domain software library originally
 distributed on 1-Jun-1991 as Version 1.5.
 
-It incorporates modifications by Howard Goldstein on 1-Jun-1991
+Version 1.5 incorporates modifications by Howard Goldstein on 1-Jun-1991
 plus those by Bruce Morgan on 16-May-1991 (Version 1.4) and Gene
 Pizzetta on 12-May-1991 (version 1.3); and includes the original
 Version 1.2 source-code by David Goodenough dated 3-Jul-1990.
@@ -18,6 +18,8 @@ routines in the comp.os.cpm USENET group that fix two long outstanding
 bugs (Jun-2020).
 
 I've incorporated Martin's fixes into a new sourcefile *UNZIP151.Z80*
+and also to the original sourecode for Version 1.2 into a renamed
+file *UNZIP121.Z80*
 
 For a discussion of the fixes - please see refer to the following
 postings at the Google Groups archive of the comp.os.cpm newsgroup -
@@ -31,9 +33,19 @@ assembler(1) and Digital Research's LINK as *UNZIP151.COM* using the
 following commands -
 
 ```
-zsm4 unzip151,unzip151=unzip151.z80
+zsm4 =unzip151.z80
 link unzip151
 ```
+
+Other Zilog Z80 assemblers/linkers can also be used (e.g. SLR Z80ASM/SLRNK
+or even Microsoft M80/L80) - however, various other linkers may create
+a .COM file with data segment storage included.
+
+There are other follow-up UNZIP programs for CP/M that use the same
+unpacking code - all derived from the Version 1.2 source-code.  They
+are _not fixed_.  Specific examples are the Simeon Cran version called
+UNZIPZ and UNZIP18 that have further minor Z-System (ZCPR 3.x or higher)
+enhancements.
 
 --
 
