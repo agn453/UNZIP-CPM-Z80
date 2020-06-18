@@ -18,10 +18,10 @@ routines in the comp.os.cpm USENET group that fix two long outstanding
 bugs (Jun-2020).
 
 I've incorporated Martin's fixes into a new sourcefile *UNZIP151.Z80*
-and also to the original sourecode for Version 1.2 into a renamed
+and also updated the original sourecode for Version 1.2 into a renamed
 file *UNZIP121.Z80*
 
-For a discussion of the fixes - please see refer to the following
+For a discussion of the fixes - please refer to the following
 postings at the Google Groups archive of the comp.os.cpm newsgroup -
 
 * Un-shrink fix https://groups.google.com/forum/#!topic/comp.os.cpm/B0A4x59SX44
@@ -38,13 +38,13 @@ link unzip151
 ```
 
 Other Zilog Z80 assemblers/linkers can also be used (e.g. SLR Z80ASM/SLRNK
-or even Microsoft M80/L80) - however, various other linkers may create
+or even Microsoft M80/L80) - however, they may create
 a .COM file with data segment storage included.
 
-There are other follow-up UNZIP programs for CP/M that use the same
-unpacking code - all derived from the Version 1.2 source-code.  They
-are _not fixed_.  Specific examples are the Simeon Cran version called
-UNZIPZ and UNZIP18 that have further minor Z-System (ZCPR 3.x or higher)
+Also note - there are other UNZIP programs for CP/M that use the same
+unpacking code derived from the Version 1.2 source-code.  They
+are _not fixed_.  Specific examples are Simeon Cran's version called
+UNZIPZ and UNZIP18 that has further minor Z-System (ZCPR 3.x or higher)
 enhancements.
 
 --
