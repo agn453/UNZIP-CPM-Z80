@@ -1,0 +1,7 @@
+; Build new version of UNZIP181 using SLR Z80ASM and SLRNK
+; using Z-System libraries from LIBS45A.LBR and ZSLIB36.LBR
+;
+z80asm unzip181/6
+; Load ASEG after CSEG - verify CSEG size is 0d7b
+; and use ASEG at 0d7b + 0100 +1 to be sure
+slrnk /a:0e7c,/p:100,unzip181,unzip181/n/e

@@ -6,6 +6,7 @@ README.md eol=crlf
 *.Z80 eol=crlf
 *.Z80 linguist-language=Assembler
 *.COM binary
+*.SUB eol=crlf
 *.lbr binary
 *.for eof=crlf
 *.for linguist-language=Assembler

@@ -17,8 +17,9 @@ used by Unix/Linux and included with Microsoft Windows and macOS).
 Background
 ----------
 
-The files have been extracted from the distribution archive
-UNZIP15.LBR from the Public Domain software library originally
+The files have been extracted from the following distribution archives.
+
+* UNZIP15.LBR from the Public Domain software library originally
 distributed on 1-Jun-1991 as Version 1.5. I obtained this from
 the Walnut Creek CP/M Software CD-ROM at
 
@@ -28,6 +29,13 @@ Version 1.5 incorporates modifications by Howard Goldstein on 1-Jun-1991
 plus those by Bruce Morgan on 16-May-1991 (Version 1.4) and Gene
 Pizzetta on 12-May-1991 (version 1.3); and includes the original
 Version 1.2 source-code by David Goodenough dated 3-Jul-1990.
+
+* UNZIP18.LBR has further modifications by Howard Goldstein for
+Z-system (ZCPR 3.x) with improved file I/O performance and buffering. It
+was obtained from
+
+http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/jsage/znode3/uploads/unzip18.lbr
+
 
 Bug Fixes
 ---------
@@ -39,6 +47,10 @@ bugs (1-Jun-2020 and 15-Jun-2020).
 I've incorporated Martin's fixes into a new sourcefile *UNZIP151.Z80*
 and also updated the original sourcecode for Version 1.2 into a renamed
 file *UNZIP121.Z80*
+
+I've also updated the Z-system Version 1.8 into a renamed source file
+*UNZIP181.Z80* and rebuilt the corresponding .COM file using the
+Z-system libraries extracted from LIBS45A.LBR and ZSLIB36.LBR
 
 For a discussion of the fixes - please refer to the following
 postings at the Google Groups archive of the comp.os.cpm newsgroup -
@@ -64,6 +76,26 @@ is _unzip151.lbr_ and can be downloaded from
 
 https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip151.lbr
 
+
+Also, the new Z-system (ZCPR 3.x) UNZIP Version 1.8-1 is in the
+library _unzip181.lbr_ and can be downloaded from
+
+https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip181.lbr
+
+The Z-system version has been built using the submit file (also included
+as _UNZIP181.SUB_) -
+
+```
+; Build new version of UNZIP181 using SLR Z80ASM and SLRNK
+; using Z-System libraries from LIBS45A.LBR and ZSLIB36.LBR
+;
+z80asm unzip181/6
+; Load ASEG after CSEG - verify CSEG size is 0d7b
+; and use ASEG at 0d7b + 0100 +1 to be sure
+slrnk /a:0e7c,/p:100,unzip181,unzip181/n/e
+```
+
+
 Notes
 -----
 
@@ -73,9 +105,7 @@ a .COM file with data segment storage included.
 
 Also, there are other UNZIP programs for CP/M that use the same
 unpacking code derived from the Version 1.2 source-code.  They
-are _not fixed_.  Specific examples are Simeon Cran's UNZIPZ 
-and a later version UNZIP18 that has further minor Z-System (ZCPR
-3.x or higher) enhancements.
+are _not fixed_.  A specific example is Simeon Cran's UNZIPZ 
 
 --
 

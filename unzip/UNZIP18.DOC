@@ -1,0 +1,99 @@
+
+                              UNZIP
+                           Version 1.3
+
+                          Gene Pizzetta
+                          May 12, 1991
+
+
+UNZIP dissolves MS-DOS ZIP files.  This version incorporates some
+quick and dirty mods to make a more useful utility.  The original
+by David Goodenough has to be the most God-awful source code I've
+ever come across.  It was totally uncommented, and I have no idea
+what kind of strange assembler it was written for.  This code now
+assembles with SLR's Z80ASM and it's a little more orderly.
+
+USAGE:
+
+     UNZIP {dir:}zipfile {dir:}
+
+Under ZCPR3 "dir" can be a DU or DIR spec.  Under vanilla CP/M
+only a drive is recognized.
+
+If a destination drive is given, member files are extracted to
+it.  With no destination given, member files are merely checked
+and listed to the screen...slowly.
+
+You can now abort this thing with ^C (and the partial output
+file, if any, will be closed and erased).  The usage screen now
+responds to "//".
+
+UNZIP still needs a lot of work.  It really ought to be possible
+to extract member files selectively, but it's all or nothing at
+present.  In addition, listing files should be a lot faster;
+checking CRC's in that mode seems unnecessary.  Typing a member
+file to the screen would also be a nice enhancement.  I have only
+limited use for an UNZIP utility, so my purpose here was to do
+just enough to make its operation acceptable.  Maybe someone else
+will interested in going further.  In the meantime, Steve
+Greenberg's ZIPDIR and Carson Wilson's ZTYPE can fill the gap.
+
+This version is probably not bullet-proof.  Testing has been very
+limited, and frankly I don't understand much of the code, but so
+far it seems to work.
+
+     Gene Pizzetta
+     481 Revere St.
+     Revere, MA 02151
+
+     Voice:  (617) 284-0891
+     Newton Centre Z-Node:  (617) 965-7259
+     Ladera Z-Node Central:  (213) 670-9465
+
+Version 1.4 modifications by Bruce Morgen, 5/16/91
+
+In addition to fixing a bug in the ZCPR3 detection code at
+"setusr," Version 1.4 adds output filename specification with
+wildcards.  Now the use of an output d:/dir: and/or an output
+filename will trigger extract mode.  If the output filespec
+contains no wildcards (a d:/dir: alone is equivalent to "*.*"),
+UNZIP will now exit after the first extraction (made sense to me,
+any objections?).  And no, Gene, I am NOT "adopting" UNZIP -- I
+just tweaked it far enough that it ceased to annoy me
+significantly in the very limited use I have for it...
+
+Version 1.5 modifications by Howard Goldstein, 6/1/91
+
+This release contains no new features or options.  Its purpose is
+merely to correct some serious bugs that were introduced in the
+previous version.  See the source file for details.
+
+Like Bruce and Gene, I have no intention of doing any further
+develompment on this program.  I will, however, attempt to fix
+anything that does not work as documented.
+
+Version 1.6 modifications by Howard Goldstein, 4/3/92
+
+OK, I lied.
+
+I began using UNZIP a bit more recently and found it to be much
+too slow.  I therefore took Gene's suggestion and changed the
+program so it no longer expands a file and checks its CRC when
+that file is not being extracted.  I also replaceed the disk read
+and write routines.  The old ones could handle only 128 bytes at
+a time; the new ones, from ZSLIB, can handle much larger
+buffers.  This increases speeed and decreases wear and tear on
+the drives.
+
+
+Version 1.7 modifications by Howard Goldstein, 4/8/92
+
+This version corrects a couple of bugs that were noticed
+shortly after version 1.6 was released.  The program now works
+correctly on files containing long ZIP comments.  A typo in the
+usage screen was also fixed.
+
+Version 1.8 modifications by Howard Goldstein, 4/16/92
+Another bug fix, (the last, I hope).  In version 1.6 I managed to
+break the section of the program that expands "reduced" files.
+Version 1.8 fixes it.
