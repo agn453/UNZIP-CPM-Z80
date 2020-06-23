@@ -3,10 +3,10 @@ text=auto
 
 README.md text eol=crlf
 *.DOC text eof=crlf
-*.Z80 text eol=crlf linguist-language=Assembler
+*.Z80 text eol=crlf linguist-language=Assembly
 *.COM binary
 *.SUB text eol=crlf
 *.lbr binary
-*.for text eof=crlf linguist-language=Assembler
+*.for text eof=crlf linguist-language=Assembly
 *.toc text eof=crlf
 
