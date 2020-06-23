@@ -1,14 +1,12 @@
 # Default is to keep crlf line endings
 text=auto
 
-README.md eol=crlf
-*.DOC eof=crlf
-*.Z80 eol=crlf
-*.Z80 linguist-language=Assembler
+README.md text eol=crlf
+*.DOC text eof=crlf
+*.Z80 text eol=crlf linguist-language=Assembler
 *.COM binary
-*.SUB eol=crlf
+*.SUB text eol=crlf
 *.lbr binary
-*.for eof=crlf
-*.for linguist-language=Assembler
-*.toc eof=crlf
+*.for text eof=crlf linguist-language=Assembler
+*.toc text eof=crlf
 
