@@ -13,6 +13,8 @@ It DOES NOT support the memory-intensive Deflate algorithm implemented
 by PKzip 2.04g and Info-ZIP (the open-source version of ZIP that's
 used by Unix/Linux and included with Microsoft Windows and macOS).
 
+UPDATE: Support has been added for Deflate - see the September 2020
+enhancement version V1.5-2 below.
 
 Background
 ----------
@@ -37,8 +39,45 @@ was obtained from
 http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/jsage/znode3/uploads/unzip18.lbr
 
 
-Bug Fixes
----------
+Bug Fixes and Enhancements
+--------------------------
+
+September 2020
+
+Martin has posted some more updates and added support to decompress
+ZIP file entries compressed with the Deflate algorithm.
+
+The changelog is -
+
+* Fix extraction of zero-length files.
+
+* Skip to the next file header if the compression method is unknown
+
+* Fix readbits when a full word (16 bits) is read (in preparation
+for implementing the unDeflate algorithm.
+
+* Fix mis-ordering of variables.  Code makes the assumption
+that "bitbuf" is the byte before "bleft".
+
+* Allow the relocation of the input buffer.
+
+* Make the output buffer size dynamic.
+
+* Implement the UnDeflate algorithm - based on the work by
+Keir Fraser's HiTech-C code at
+https://github.com/keirf/Amiga-Stuff/blob/master/inflate/degzip_portable.c
+
+You'll find the updated sourcefile as *UNZIP152.Z80* which you
+can also get in a CP/M format library file from
+
+https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip152.lbr
+
+NOTE: The diff files provided by Martin were unable to be applied
+for the later releases.  I'll see if I can apply them manually to
+produce a similarly updated UNZIP Version 1.8-2 soon.
+
+
+June 2020
 
 Recently Martin posted two bug fixes to the unshrink and unimplode
 routines in the comp.os.cpm USENET group that fix two long outstanding

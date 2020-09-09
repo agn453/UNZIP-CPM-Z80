@@ -1,0 +1,2315 @@
+; UNZIP.Z80
+;
+;	Dissolves MS-DOS ZIP files.
+;
+Vers	equ	15
+Revisn	equ	2		;;v1.5-2
+;
+;
+; Version 1.5-2 -- September 3, 2020 -- Martin
+;	In further postings to the USENET newsgroup comp.os.cpm, some
+;	more enhancements.
+;
+;	Fix extraction of zero-length files.
+;	Skip to the next file header if the compression method is unknown
+;	Fix readbits when a full word (16 bits) is read (in preparation
+;	for implementing the unDeflate algorithm.
+;	Fix mis-ordering of variables.  Code makes the assumption
+;	that "bitbuf" is the byte before "bleft".
+;	Allow the relocation of the input buffer.
+;	Make the output buffer size dynamic.
+;	Implement the UnDeflate algorithm (based on the work by
+;	Keir Fraser's HiTech-C code at
+;	https://github.com/keirf/Amiga-Stuff/blob/master/inflate/degzip_portable.c
+;
+; Version 1.5-1 -- June 17, 2020 -- Martin
+;	In postings to the USENET newgroup comp.os.cpm, a flaw in both
+;	the un-implode and un-shrink routines was found to be causing
+;	CRC errors.
+;
+;	For un-implode, the algorithm is essentially a translation
+;	of the PKZ101 MS-DOS algorithm in C that has been hand optimized
+;	into Z80 assembly language.  However, the readtree() function
+;	was incorrectly returning a byte value in the A register, when
+;	the shift routine at label ui5 was expecting a 16-bit value in HL.
+;
+;	For unshrink, there is a race condition with handling the "KwKwK"
+;	case that was omitted from the routine.
+;
+;	Both updates are flagged with ;;v1.5-1 comments, and the
+;	version sign-on message now includes the revision.
+
+
+; Version 1.5 -- june 1, 1991 -- Howard Goldstein
+;	Fixed bug at WILDLP which was causing an output spec of "dir:"
+;	not to work correctly.  Corrected problems that were causing
+;	writes to disk when a non-matching member file was being skipped.
+;	Changed "disk full" logic to close and erase partial output file
+;	and abort the program immediately.  Made several minor changes to
+;	allow assembly with ZMAC or M80.
+
+; Version 1.4 -- May 16, 1991 -- Bruce Morgen
+;	Fixed bug at "setusr" and added output filename wildcard
+;	support.  If the selected output filespec is NOT wild,
+;	(and d: or dir: alone IS wild) UNZIP will exit after the
+;	first extraction.  Boy, do I have a headache....
+
+; Version 1.3 -- May 12, 1991 -- Gene Pizzetta
+;	Some quick and dirty mods to make this utility more useful.
+;	The original has to be the most God-awful source code I've
+;	ever come across.  It is totally uncommented, and I have
+;	no idea what kind of strange assembler it was written for.
+;	This code now assembles with SLR's Z80ASM and it's a little
+;	more orderly.
+;
+;	New syntax:
+;		UNZIP {dir:}zipfile {dir:}{afn}
+;	Under ZCPR3 "dir" can be a DU or DIR spec; otherwise, just
+;	a drive.  If no destination is given, member files are checked
+;	and listed.  If a destination is given, member files are
+;	extracted if they match "afn" if given, otherwise the entire
+;	ZIPfile is extracted.
+;
+;	You can now abort this thing with ^C (and the partial output
+;	file, if any, will be closed and erased).  Usage screen now
+;	responds to "//".  This program still needs a lot of work.
+;	It's probably not bullet-proof and testing has been very
+;	limited, but it seems to work.
+;
+; Version 1.2 -- July 3, 1990 -- David P. Goodenough
+;
+; System addresses
+;
+wboot	equ	0
+bdos	equ	5
+infcb	equ	5Ch
+altfcb	equ	6Ch
+;
+; BDOS service functions
+;
+conout	equ	2
+dircon	equ	6
+fopen	equ	15
+fclose	equ	16
+ferase	equ	19
+fread	equ	20
+fwrite	equ	21
+fmake	equ	22
+getdrv	equ	25
+setdma	equ	26
+setusr	equ	32
+;
+; Other
+;
+STRSIZ	equ	256
+DLE	equ	144
+max_bits equ	13
+init_bits equ	9
+hsize	equ	8192
+first_ent equ	257
+clear	equ	256
+maxcmax	equ	1 shl max_bits
+maxSF	equ	256
+_code	equ	0
+_value	equ	2
+_bitlength equ	3
+_entries equ	0
+_maxlength equ	2
+_entry	equ	4
+_sf_tree_ equ	4 + 4 * maxSF
+maxcl	equ	16
+nrcl	equ	19
+nrlit	equ	288
+nrdist	equ	32
+;
+; ASCII
+;
+CtrlC	equ	03h
+CR	equ	0Dh
+LF	equ	0Ah
+CtrlZ	equ	1Ah
+;
+	aseg
+	org	100h
+;
+	jp	start
+;
+	db	'Z3ENV',1
+Z3EAdr:	dw	0
+;
+start:	ld	(oldstk),sp	; save old stack here for future use
+	ld	sp,(6)		; set the stack pointer
+	call	ilprt
+	db	'UNZIP  Version '
+	db	Vers/10+'0','.',Vers mod 10+'0'
+	db	'-',Revisn mod 10+'0'	;;v1.5-1 identify revision
+	db	' - DPG',CR,LF,0
+	ld	a,(infcb+1)	; filename?
+	cp	' '
+	jp	z,usage
+	cp	'/'
+	jp	z,usage
+;
+wasfil:	ld	de,altfcb
+	ld	a,(de)		; output drive given?
+	ld	(opfcb),a	; store it in output file control block
+	ld	(mode),a	; set the mode (non-zero = extract)
+	call	getusr		; get input and output users, if ZCPR3
+	ld	hl,mtchfcb
+	ld	bc,11
+	inc	de
+	ld	a,(de)
+	cp	20h
+	jr	z,wildfill
+	ex	de,hl
+	ldir
+	ld	a,(altfcb)
+	or	a
+	jr	nz,filldn
+	ld	c,getdrv
+	call	bdos
+	inc	a
+	ld	(opfcb),a	; store it in output file control block
+	ld	(mode),a	; set the mode (non-zero = extract)
+	jr	filldn
+wildfill:
+	ld	b,c
+wildlp:	ld	(hl),'?'
+	inc	hl
+	djnz	wildlp
+filldn:	ld	a,(infcb+9)	; check for filetype
+	cp	20h
+	jr	nz,wasext
+	ld	hl,+('I' shl 8) + 'Z'	; set default type to ZIP
+	ld	(infcb+9),hl
+	ld	a,'P'
+	ld	(infcb+11),a
+wasext:	call	setin		; log input user
+	ld	de,infcb
+	ld	c,fopen
+	call	bdos		; try and open ZIP file
+	inc	a
+	jr	nz,openok	; ok
+	call	ilprt		; complain and fall through to exit
+	db	'Couldn''t find ZIP file',CR,LF,0
+;
+; All exits point here for possible future enhancements, such
+; as elimination of warm boot.
+;
+exit:	jp	wboot
+;
+sigerr:	call	ilprt
+	db	'Bad signature in ZIP file',CR,LF,0
+	jr	exit
+;
+openok:	call	getword
+	ld	de,-(('K' shl 8) + 'P')
+	add	hl,de
+	ld	a,h
+	or	l
+	jr	nz,sigerr
+	call	getword
+	dec	l
+	jr	nz,nocfhs
+	dec	h
+	dec	h
+	jr	nz,sigerr
+	call	pcfh
+	jr	openok
+;
+nocfhs:	dec	l
+	dec	l
+	jr	nz,nolfhs
+	ld	a,h
+	sub	4
+	jr	nz,sigerr
+	call	plfh
+	jr	openok
+;
+nolfhs:	dec	l
+	dec	l
+	jr	nz,sigerr
+	ld	a,h
+	sub	6
+	jr	nz,sigerr
+	call	pecd
+	jr	exit
+;
+pcfh:	ld	b,12
+pcfhl1:	push	bc
+	call	getword
+	pop	bc
+	djnz	pcfhl1
+	call	getword
+	push	hl
+	call	getword
+	push	hl
+	call	getword
+	pop	de
+	pop	bc
+	push	hl
+	push	de
+	push	bc
+	ld	b,6
+pcfhl2:	push	bc
+	call	getword
+	pop	bc
+	djnz	pcfhl2
+	pop	hl
+	ld	de,junk
+	call	getstring
+	pop	hl
+	ld	de,junk
+	call	getstring
+	pop	hl
+	ld	de,junk
+	call	getstring
+	ret
+;
+pecd:	ld	b,8
+pecdl:	push	bc
+	call	getword
+	pop	bc
+	djnz	pecdl
+	call	getword
+	ld	de,junk
+	call	getstring
+	ret
+;
+plfh:	ld	de,lfh
+	ld	hl,endlfh-lfh
+	call	getstring
+	ld	hl,opfcb+1
+	ld	de,opfcb+2
+	ld	bc,33
+	ld	(hl),b
+	ldir
+	ld	de,junk
+	ld	hl,(fnl)
+	call	getstring
+	ld	de,junk + 20
+	ld	hl,(efl)
+	call	getstring
+	ld	de,junk
+	ld	hl,opfn
+	ld	b,8
+	call	scanfn
+	ld	a,(de)
+	cp	'.'
+	jr	nz,nodot
+	inc	de
+nodot:	ld	b,3
+	call	scanfn
+	ld	hl,init
+	ld	de,vars
+	ld	bc,endinit-init
+	ldir
+	ld	a,(mode)
+resmod:	ld	(curmode),a
+	or	a
+	jr	z,extrct
+mtched:	call	setout		; log output user
+	ld	de,opfcb	; see if output file already exists
+	ld	c,fopen
+	call	bdos
+	inc	a
+	jr	nz,exists
+	ld	b,11
+	ld	hl,opfn
+	ld	de,mtchfcb
+mtchlp:	ld	a,(de)
+	ld	c,(hl)
+	inc	hl
+	inc	de
+	cp	'?'
+	jr	z,mtch1
+	res	7,c
+	cp	c
+	jr	nz,nomtch
+mtch1:	djnz	mtchlp
+	jr	creok		; (nope, so continue)
+nomtch:	ld	hl,junk
+	call	pstr
+	call	ilprt
+	db	' doesn''t match',0
+	jr	noex
+exists:	ld	hl,junk		; it exists, so skip it
+	call	pstr
+	call	ilprt
+	db	' exists',0
+noex:	call	ilprt
+	db	' -- not extracting  ',0
+	xor	a
+	jr	resmod
+;
+extrct:	xor	a
+	ld	(zipeof),a
+	ld	a,(curmode)
+	or	a
+	jr	nz,doext
+	call	ilprt
+	db	'Checking ',0
+	jr	pjunk
+;
+creok:	call	setout
+	ld	de,opfcb	; create output file
+	ld	c,fmake
+	call	bdos
+	inc	a
+	jr	nz,opnok1
+	call	ilprt
+	db	'Error creating ',0
+	ld	hl,junk
+	call	pstr
+	jr	noex
+;
+opnok1:	call	ilprt
+	db	'Extracting ',0
+pjunk:	ld	hl,junk
+	call	pstr
+doext:	call	ilprt
+	db	' -- ',0
+	ld	hl,(cs)
+	ld	de,(cs + 2)
+	ld	a,d
+	or	e
+	or	h
+	or	l
+	ld	hl,zipeof
+	jr	nz,neof
+	inc	(hl)
+neof:	inc	hl
+	inc	(hl)
+	ld	a,(cm)
+	or	a
+	jr	nz,case1
+case0w:	ld	a,(zipeof)
+	and	1
+	jr	nz,closeo
+savcs0:	call	getbyte
+	call	outbyte
+	jr	case0w
+;
+case1:	dec	a
+	jr	nz,case2p
+	call	unshrink
+	jr	closeo
+;
+case2p:	dec	a
+	cp	4
+	jr	nc,tryimp
+	call	unreduce
+	jr	closeo
+;
+tryimp:	jr	nz,trydfl
+	call	unimplode
+	jr	closeo
+;
+trydfl:	cp	6
+	jr	nz,badzip
+	call	undeflate
+	jr	closeo
+;
+badzip:	call	ilprt
+	db	'Unknown compression method',CR,LF,0
+badskp:	ld	a,(zipeof)
+	and	1
+	jr	nz,closeo
+	call	getbyte
+	jr	badskp
+	ret
+;
+closeo:	ld	hl,zipeof
+	dec	(hl)
+	inc	hl
+	dec	(hl)
+	ld	a,(curmode)
+	or	a
+	jr	z,nocls
+;	jr	nz,nocls
+	ld	hl,wrtpt
+	ld	a,(hl)
+	or	a
+	jr	z,noflsh
+	ld	de,opbuf
+	ld	c,setdma
+	call	bdos
+	call	setout
+	ld	de,opfcb
+	ld	c,fwrite
+	call	bdos
+noflsh:	call	setout
+	ld	de,opfcb
+	ld	c,fclose
+	call	bdos
+nocls:	ld	hl,crc32
+	ld	de,crc
+	scf
+	ld	bc,4 shl 8
+crcclp:	ld	a,(de)
+	adc	a,(hl)
+	push	af
+	or	c
+	ld	c,a
+	pop	af
+	inc	hl
+	inc	de
+	djnz	crcclp
+	ld	a,c
+	or	a
+	jr	z,crcok
+	call	ilprt
+	db	'CRC error',CR,LF,0
+	jr	wildck
+;
+crcok:	call	ilprt
+	db	'CRC OK',CR,LF,0
+wildck:	ld	a,(curmode)
+	or	a
+	ret	z
+	ld	hl,mtchfcb
+	ld	bc,11
+	ld	a,'?'
+	cpir
+	jp	nz,exit
+	ret
+;
+getchla:
+	call	getcode
+	ld	(code),hl
+	ld	a,(zipeof)
+	and	1
+	ret
+;
+savstk:	ld	hl,(stackp)
+	dec	hl
+	ld	(stackp),hl
+	ld	(hl),a
+	ret
+;
+getcode:
+	ld	a,(codesize)
+readbits:
+	ld	hl,8000h
+bitlp:	push	af
+	push	hl
+getbit:	ld	hl,bleft
+	dec	(hl)
+	jp	m,readbt
+	dec	hl
+	rr	(hl)
+	pop	hl
+	rr	h
+	rr	l
+	jr	c,bitex
+	pop	af
+	dec	a
+	jr	nz,bitlp
+finbit:	srl	h
+	rr	l
+	jr	nc,finbit
+	jr	bitret
+bitex:	pop	af
+bitret:	ld	a,l
+	ret
+;
+readbt:	push	hl
+	call	getbyte
+	pop	hl
+	ld	(hl),8
+	dec	hl
+	ld	(hl),a
+	jr	getbit
+;
+scanfn:	ld	a,(de)
+	cp	'.'
+	jr	z,nocopy
+	or	a
+	jr	z,nocopy
+	inc	de
+	dec	b
+	jp	m,scanfn
+	ld	(hl),a
+	inc	hl
+	jr	scanfn
+;
+nocopy:	dec	b
+	ret	m
+	ld	(hl),' '
+	inc	hl
+	jr	nocopy
+;
+ilprt:	pop	hl
+	call	pstr
+	jp	(hl)
+;
+pstr:	ld	a,(hl)
+	or	a
+	ret	z
+	push	hl
+	ld	e,a
+	ld	c,conout
+	call	bdos
+	pop	hl
+	inc	hl
+	jr	pstr
+;
+getstring:
+	ld	a,h
+	or	l
+	ld	(de),a
+	ret	z
+	push	de
+	push	hl
+	call	getbyte
+	pop	hl
+	pop	de
+	ld	(de),a
+	inc	de
+	dec	hl
+	jr	getstring
+;
+getword:
+	call	getbyte
+	push	af
+	call	getbyte
+	pop	hl
+	ld	l,h
+	ld	h,a
+	ret
+;
+getbyte:
+	ld	a,(counting)
+	or	a
+	jr	nz,dodci
+	ld	a,(zipeof)
+	and	1
+	ld	a,CtrlZ
+	ret	nz
+	jr	skpdci
+dodci:	ld	hl,(cs)
+	ld	de,(cs + 2)
+	ld	a,d
+	or	e
+	or	h
+	or	l
+	jr	nz,noteof
+	ld	hl,zipeof
+	inc	(hl)
+	ld	a,CtrlZ
+	ret
+;
+noteof:	ld	a,h
+	or	l
+	dec	hl
+	ld	(cs),hl
+	jr	nz,skpdci
+	dec	de
+	ld	(cs + 2),de
+skpdci:	call	ckcon		; check console for abort
+	ld	hl,readpt
+	ld	a,(hl)
+	add	a,a
+	jr	nc,ptok
+	ld	(hl),a
+	ld	de,80h
+	push	hl
+	ld	c,setdma
+	call	bdos
+	call	setin
+	ld	de,infcb
+	ld	c,fread
+	call	bdos
+	or	a
+	pop	hl
+	jr	nz,ateof
+ptok:	ld	a,(hl)
+	inc	(hl)
+	ld	l,a
+	ld	h,0
+	ld	de,(inbufp)
+	add	hl,de
+	ld	a,(hl)
+	ret
+;
+ateof:	ld	a,CtrlZ
+	ret
+;
+outb:	ld	hl,(outpos)
+	push	hl
+	push	af
+	ld	a,(omask)
+	and	h
+	ld	h,a
+	pop	af
+	ld	de,outbuf
+	add	hl,de
+	ld	(hl),a
+	pop	hl
+	inc	hl
+	ld	(outpos),hl
+	push	af
+	ld	a,h
+	or	l
+	jr	nz,nopos
+	ld	hl,(outpos + 2)
+	inc	hl
+	ld	(outpos + 2),hl
+nopos:	pop	af
+outbyte:
+	push	af
+	call	updcrc
+	ld	hl,(ucs)
+	ld	de,(ucs + 2)
+	ld	a,h
+	or	l
+	dec	hl
+	ld	(ucs),hl
+	jr	nz,tsthl0
+	dec	de
+	ld	(ucs + 2),de
+tsthl0:	ld	a,h
+	or	l
+	or	d
+	or	e
+	jr	nz,noeof
+	ld	hl,zipeof
+	inc	(hl)
+noeof:	ld	a,(curmode)
+	or	a
+	jr	nz,noeof1
+	pop	af
+	ret
+;
+noeof1:	ld	hl,wrtpt
+	ld	a,(hl)
+	add	a,a
+	jr	nc,wptok
+	ld	de,opbuf
+	ld	c,setdma
+	call	bdos
+	call	setout
+	ld	de,opfcb
+	ld	c,fwrite
+	call	bdos
+	or	a
+	jr	z,wptok
+	call	ilprt
+	db	'Write Error (Disk full)',CR,LF,0
+	jp	ckcon0
+;
+wptok:	jr	nz,nofilb
+	ld	hl,opbuf
+	ld	de,opbuf + 1
+	ld	bc,127
+	ld	(hl),CtrlZ
+	ldir
+	xor	a
+	ld	(wrtpt),a
+nofilb:	pop	af
+	ld	hl,wrtpt
+	inc	(hl)
+	ld	l,(hl)
+	ld	h,0
+	ld	de,opbuf - 1
+	add	hl,de
+	ld	(hl),a
+	ret
+;
+updcrc:	ld	hl,(crc32)
+	ld	de,(crc32 + 2)
+	ld	c,a
+	ld	b,8
+crclp:	ld	a,l
+	xor	c
+	srl	c
+	srl	d
+	rr	e
+	rr	h
+	rr	l
+	rra
+	jr	nc,noxor
+	ld	a,d
+	xor	0edh
+	ld	d,a
+	ld	a,e
+	xor	0b8h
+	ld	e,a
+	ld	a,h
+	xor	83h
+	ld	h,a
+	ld	a,l
+	xor	20h
+	ld	l,a
+noxor:	djnz	crclp
+	ld	(crc32),hl
+	ld	(crc32 + 2),de
+	ret
+;
+unshrink:
+	ld	a,1fh
+	ld	(omask),a
+	ld	a,init_bits
+	ld	(codesize),a
+	ld	hl,+(1 shl init_bits) - 1;
+	ld	(maxcode),hl
+	ld	hl,first_ent
+	ld	(free_ent),hl
+	ld	hl,prefix_of
+	ld	de,prefix_of + 1
+	ld	bc,512
+	ld	(hl),c
+	ldir
+	ld	bc,16386 - 512
+	ld	(hl),-1
+	ldir
+	ld	hl,suffix_of
+sol:	ld	(hl),c
+	inc	hl
+	inc	c
+	jr	nz,sol
+	call	getchla
+	ld	(oldcode),hl
+	ret	nz
+	ld	a,l
+	ld	(finchar),a
+	call	outbyte
+unshlp:	ld	hl,stack + 8192
+	ld	(stackp),hl
+	ld	a,(zipeof)
+	and	1
+	ret	nz
+clrlp:	call	z,getchla
+	ret	nz
+	ld	a,h
+	dec	a
+	or	l
+	jr	nz,noclr
+	call	getchla
+	ld	a,h
+	or	a
+	jr	nz,clrlp
+	dec	l
+	jr	z,bumpcs
+	dec	l
+	call	z,partial_clear
+	jr	clrlp
+;
+bumpcs:	ld	hl,codesize
+	inc	(hl)
+	ld	a,(hl)
+	cp	max_bits
+	ld	hl,maxcmax
+	jr	z,atmax
+	ld	hl,1
+maxclp:	add	hl,hl
+	dec	a
+	jr	nz,maxclp
+	dec	hl
+atmax:	ld	(maxcode),hl
+	jr	clrlp
+;
+noclr:	ld	(incode),hl	;;v1.5-1 start unshrink fix
+	add	hl,hl
+	ld	de,prefix_of
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	and	(hl)
+	inc	a
+	ld	hl,(code)
+	jr	nz,noKwKw
+	ld	a,(finchar)
+	call	savstk
+	ld	hl,(oldcode)
+noKwKw:	ex	de,hl
+;
+staklp:	ld	hl,100h
+	or	a
+	sbc	hl,de
+	jr	nc,unstak
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	and	(hl)
+	inc	a
+	jr	nz,noKw2
+	ld	a,(finchar)
+	call	savstk
+	ld	de,(oldcode)
+	jr	staklp
+;
+noKw2:	ld	hl,suffix_of
+	add	hl,de
+	ld	a,(hl)
+	call	savstk
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	jr	staklp
+;
+unstak:	ld	hl,suffix_of
+	add	hl,de
+	ld	a,(hl)
+	call	savstk
+	ld	(finchar),a	;;v1.5-1 end of unshrink fix
+	ld	de,(stackp)
+unslp:	ld	hl,stack + 8192
+	or	a
+	sbc	hl,de
+	jr	z,newent
+	ld	a,(de)
+	inc	de
+	push	de
+	call	outbyte
+	pop	de
+	jr	unslp
+;
+newent:	ld	hl,(free_ent)
+	ld	(code),hl
+	ex	de,hl
+	ld	hl,1fffh
+	or	a
+	sbc	hl,de
+	jr	c,full
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	bc,(oldcode)
+	ld	(hl),c
+	inc	hl
+	ld	(hl),b
+	ld	hl,suffix_of
+	add	hl,de
+	ld	a,(finchar)
+	ld	(hl),a
+getfre:	inc	de
+	ld	hl,1fffh
+	or	a
+	sbc	hl,de
+	jr	c,full1
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	and	(hl)
+	inc	a
+	jr	nz,getfre
+full1:	ld	(free_ent),de
+full:	ld	hl,(incode)
+	ld	(oldcode),hl
+	jp	unshlp
+;
+partial_clear:
+	ld	de,first_ent
+l8:	ld	hl,(free_ent)
+	or	a
+	sbc	hl,de
+	jr	z,br8
+	ld	hl,prefix_of + 1
+	add	hl,de
+	add	hl,de
+	set	7,(hl)
+	inc	de
+	jr	l8
+;
+br8:	ld	de,first_ent
+l9:	ld	hl,(free_ent)
+	or	a
+	sbc	hl,de
+	jr	z,br9
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	push	de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	res	7,d
+	ld	hl,first_ent - 1
+	or	a
+	sbc	hl,de
+	jr	nc,ei10
+	ld	hl,prefix_of + 1
+	add	hl,de
+	add	hl,de
+	res	7,(hl)
+ei10:	pop	de
+	inc	de
+	jr	l9
+;
+br9:	ld	de,first_ent
+l10:	ld	hl,(free_ent)
+	or	a
+	sbc	hl,de
+	jr	z,br10
+	ld	hl,prefix_of + 1
+	add	hl,de
+	add	hl,de
+	bit	7,(hl)
+	jr	z,ei11
+	ld	(hl),-1
+	dec	hl
+	ld	(hl),-1
+ei11:	inc	de
+	jr	l10
+;
+br10:	ld	de,first_ent
+l11:	ld	hl,maxcmax
+	or	a
+	sbc	hl,de
+	jr	z,br11
+	ld	hl,prefix_of
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	and	(hl)
+	inc	a
+	jr	z,br11
+	inc	de
+	jr	l11
+br11:	ld	(free_ent),de
+	ret
+;
+loadfollowers:
+	ld	hl,Slen + 255
+	ld	b,0
+lflp:	push	bc
+	push	hl
+	ld	a,6
+	call	readbits
+	pop	hl
+	pop	de
+	ld	(hl),a
+	push	de
+	push	hl
+	dec	d
+	ld	hl,followers
+	call	shftadd
+	ld	b,a
+	or	a
+	jr	z,nofoll
+ldfllp:	push	hl
+	push	bc
+	ld	a,8
+	call	readbits
+	pop	bc
+	pop	hl
+	ld	(hl),a
+	inc	hl
+	djnz	ldfllp
+nofoll:	pop	hl
+	pop	bc
+	dec	hl
+	djnz	lflp
+	ret
+;
+unreduce:
+	ld	e,a
+	ld	d,0
+	ld	hl,_L_table
+	add	hl,de
+	ld	a,(hl)
+	ld	(L_table),a
+	ld	hl,_D_shift
+	add	hl,de
+	ld	a,(hl)
+	ld	(D_shift),a
+	ld	a,1fh
+	ld	(omask),a
+	xor	a
+	ld	(ExState),a
+	ld	(lchar),a
+	call	loadfollowers
+ur1:	ld	a,(zipeof)
+	and	1
+	ret	nz
+	call	slenlch
+	or	a
+	jr	nz,ur2
+ur4:	ld	a,8
+	call	readbits
+	jr	ur3
+;
+ur2:	ld	a,1
+	call	readbits
+	dec	l
+	jr	z,ur4
+	call	slenlch
+	dec	a
+	or	1
+	ld	l,a
+	xor	a
+btlp:	inc	a
+	srl	l
+	jr	nz,btlp
+	call	readbits
+	ld	de,followers
+	add	hl,de
+	ld	de,(lchar - 1)
+	call	shftadd
+	ld	a,(hl)
+ur3:	ld	(nchar),a
+	ld	l,a
+	ld	a,(ExState)
+	or	a
+	jr	nz,ur5
+	ld	a,l
+	cp	DLE	
+	jr	nz,ur9
+	ld	a,1
+	ld	(ExState),a
+	jr	ur6
+;
+ur5:	dec	a
+	jr	nz,ur7
+	ld	a,l
+	or	a
+	jr	z,ur10
+	ld	(V),a
+	ld	a,(L_table)
+	ld	h,a
+	and	l
+	cp	h
+	ld	l,a
+	ld	h,0
+	ld	(Len),hl
+	jr	nz,ur12
+	ld	a,2
+	jr	ur11
+;
+ur10:	ld	(ExState),a
+	ld	a,DLE
+ur9:	call	outb
+	jr	ur6
+;
+ur7:	dec	a
+	jr	nz,ur8
+	ld	a,l
+	ld	hl,Len
+	add	a,(hl)
+	ld	(hl),a
+	jr	nc,ur12
+	inc	hl
+	inc	(hl)
+ur12:	ld	a,3
+	jr	ur11
+;
+ur8:	dec	a
+	jr	nz,ur13
+	ld	a,(D_shift)
+	ld	b,a
+	ld	a,(V)
+ur14:	srl	a
+	djnz	ur14
+	ld	h,a
+	inc	hl
+	ld	bc,(Len)
+	inc	bc
+	inc	bc
+	inc	bc
+	call	callback
+ur13:	xor	a
+ur11:	ld	(ExState),a
+ur6:	ld	a,(nchar)
+	ld	(lchar),a
+	jp	ur1
+;
+slenlch:
+	ld	hl,(lchar)
+	ld	h,0
+	ld	de,Slen
+	add	hl,de
+	ld	a,(hl)
+	ret
+;
+shftadd:
+	ld	e,0
+	srl	d
+	rr	e
+	srl	d
+	rr	e
+	add	hl,de
+	ret
+;
+callback:
+	push	bc
+	push	hl
+	ld	hl,(outpos)
+	ld	de,(outpos + 2)
+	pop	bc
+	or	a
+	sbc	hl,bc
+	jr	nc,cb2
+	dec	de
+cb2:	pop	bc
+cb3:	bit	7,d
+	jr	z,cb4
+	ld	a,b
+	or	c
+	jr	z,cb4
+	xor	a
+	call	outbp
+	inc	hl
+	ld	a,h
+	or	l
+	jr	nz,cb5
+	inc	de
+cb5:	dec	bc
+	jr	cb3
+;
+cb4:	ex	de,hl
+cb6:	ld	a,b
+	or	c
+	ret	z
+	ld	a,(omask)
+	and	d
+	ld	d,a
+	ld	hl,outbuf
+	add	hl,de
+	ld	a,(hl)
+	call	outbp
+	inc	de
+	dec	bc
+	jr	cb6
+;
+outbp:	push	hl
+	push	de
+	push	bc
+	call	outb
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+;
+readlengths:
+	ld	a,8
+	call	readbits
+	ld	d,h
+	ld	e,d
+	inc	hl
+	ld	b,h
+	ld	c,l
+	ld	(ix + _maxlength),e
+	ld	(ix + _maxlength + 1),d
+	push	ix
+	pop	hl
+	inc	hl
+	inc	hl
+	inc	hl
+rl1:	ld	a,b
+	or	c
+	ret	z
+	push	bc
+	push	de
+	push	hl
+	ld	a,4
+	call	readbits
+	inc	a
+	push	af
+	ld	a,4
+	call	readbits
+	inc	a
+	ld	b,a
+	pop	af
+	ld	c,a
+	pop	hl
+	pop	de
+	ld	a,(ix + _maxlength)
+	cp	c
+	jr	nc,rl2
+	ld	(ix + _maxlength),c
+rl2:	inc	hl
+	inc	hl
+	inc	hl
+	ld	(hl),e
+	inc	hl
+	ld	(hl),c
+	inc	e
+	djnz	rl2
+	pop	bc
+	dec	bc
+	jr	rl1
+;
+sortlengths:
+	ld	h,(ix + _entries + 1)
+	ld	l,(ix + _entries)
+	ld	b,h
+	ld	c,l
+	ld	(entrs),hl
+sl7:	srl	b
+	rr	c
+sl1:	ld	a,b
+	or	c
+	ret	z
+	ld	(noswps),a
+	push	ix
+	ld	de,4
+	add	ix,de
+	push	ix
+	pop	iy
+	add	iy,bc
+	add	iy,bc
+	add	iy,bc
+	add	iy,bc
+	ld	hl,(entrs)
+	or	a
+	sbc	hl,bc
+sl2:	ld	a,(ix + _bitlength)
+	cp	(iy + _bitlength)
+	jr	c,sl4
+	jr	nz,sl3
+	ld	a,(iy + _value)
+	cp	(ix + _value)
+	jr	nc,sl4
+sl3:	ld	d,e
+sl5:	ld	a,(ix)
+	push	af
+	ld	a,(iy)
+	ld	(ix),a
+	pop	af
+	ld	(iy),a
+	inc	ix
+	inc	iy
+	dec	d
+	jr	nz,sl5
+	ld	a,d
+	ld	(noswps),a
+	jr	sl6
+;
+sl4:	add	ix,de
+	add	iy,de
+sl6:	dec	hl
+	ld	a,h
+	or	l
+	jr	nz,sl2
+	pop	ix
+	ld	a,(noswps)
+	or	a
+	jr	nz,sl7
+	jr	sl1
+;
+generatetrees:
+	ld	l,(ix + _entries)
+	ld	h,(ix + _entries + 1)
+	ld	c,l
+	ld	b,h
+	push	ix
+	pop	de
+	add	hl,hl
+	add	hl,hl
+	add	hl,de
+	push	hl
+	pop	iy
+	xor	a
+	ld	d,a
+	ld	e,a
+	ld	h,a
+	ld	l,a
+	ld	(lbl),a
+gt1:	ld	a,b
+	or	c
+	ret	z
+	dec	bc
+	add	hl,de	
+	ld	a,(lbl)
+	cp	(iy + _bitlength)
+	jr	z,gt2
+	ld	a,(iy + _bitlength)
+	ld	(lbl),a
+	sub	16
+	ex	de,hl
+	ld	hl,1
+	jr	z,gt3
+gt4:	add	hl,hl
+	inc	a
+	jr	nz,gt4
+gt3:	ex	de,hl
+gt2:	ld	(iy + _code),l
+	ld	(iy + _code + 1),h
+	push	de
+	ld	de,-4
+	add	iy,de
+	pop	de
+	jr	gt1
+;
+ldtrees:
+	ld	a,(gpbf)
+	rra
+	ld	l,a
+	and	1
+	add	a,6
+	ld	(dictb),a
+	ld	a,l
+	rra
+	and	1
+	ld	(ltp),a
+	set	1,a
+	ld	(mml),a
+	ld	ix,lit_tree
+	ld	hl,256
+	call	nz,ld_tree
+	ld	hl,64
+	ld	ix,len_tree
+	call	ld_tree
+	ld	hl,64
+	ld	ix,dist_tre
+ld_tree:
+	ld	(ix + _entries),l
+	ld	(ix + _entries + 1),h
+	call	readlengths
+	call	sortlengths
+	call	generatetrees
+reversebits:
+	push	ix
+	pop	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+rb1:	inc	hl
+	inc	hl
+	inc	hl
+	ld	c,(hl)
+	ld	b,8
+rb2:	srl	c
+	adc	a,a
+	djnz	rb2
+	push	af
+	inc	hl
+	ld	c,(hl)
+	ld	b,8
+rb3:	srl	c
+	adc	a,a
+	djnz	rb3
+	dec	hl
+	ld	(hl),a
+	pop	af
+	inc	hl
+	ld	(hl),a
+	dec	de
+	ld	a,d
+	or	e
+	jr	nz,rb1
+	ret
+;
+readtree:
+	push	ix
+	pop	iy
+	ld	de,4
+	add	iy,de
+	ld	b,d
+	ld	e,d
+	ld	h,d
+	ld	l,d
+rt1:	push	hl
+	push	de
+	push	bc
+	ld	a,1
+	call	readbits
+	pop	af
+	push	af
+	or	a
+	jr	z,rt2
+rt3:	add	hl,hl
+	dec	a
+	jr	nz,rt3
+rt2:	pop	bc
+	pop	de
+	add	hl,de
+	ex	de,hl
+	inc	b
+	pop	hl
+rt4:	ld	a,(iy + _bitlength)
+	cp	b
+	jr	nc,rt5
+	push	de
+	ld	de,4
+	add	iy,de
+	pop	de
+	inc	hl
+	ld	a,(ix + _entries)
+	sub	l
+	jr	nz,rt4
+	ld	a,(ix + _entries + 1)
+	sub	h
+	jr	nz,rt4
+rt6:	dec	a
+	ret
+;
+rt5:	ld	a,(iy + _bitlength)
+	cp	b
+	jr	nz,rt1
+	ld	a,(iy + _code)
+	cp	e
+	jr	nz,rt7
+	ld	a,(iy + _code + 1)
+	cp	d
+	jr	nz,rt7
+	ld	a,(iy + _value)
+	ret
+;
+rt7:	push	de
+	ld	de,4
+	add	iy,de
+	pop	de
+	inc	hl
+	ld	a,(ix + _entries)
+	sub	l
+	jr	nz,rt5
+	ld	a,(ix + _entries + 1)
+	sub	h
+	jr	nz,rt5
+	jr	rt6
+;
+unimplode:
+	ld	a,1fh
+	ld	(omask),a
+	call	ldtrees
+ui1:	ld	a,(zipeof)
+	and	1
+	ret	nz
+	inc	a
+	call	readbits
+	or	a
+	jr	z,ui2
+	ld	a,(ltp)
+	or	a
+	jr	z,ui3
+	ld	ix,lit_tree
+	call	readtree
+	jr	ui4
+;
+ui3:	ld	a,8
+	call	readbits
+ui4:	call	outb
+	jr	ui1
+;
+ui2:	ld	a,(dictb)
+	call	readbits
+	push	hl
+	ld	ix,dist_tre
+	call	readtree
+	ld	l,a		;;v1.5-1 unimplode fix
+	ld	h,0		;;v1.5-1
+	ld	bc,(dictb - 1)
+ui5:	add	hl,hl
+	djnz	ui5
+	pop	bc
+	add	hl,bc
+	push	hl
+	ld	ix,len_tree
+	call	readtree
+	ld	l,a
+	ld	h,0
+	cp	63
+	jr	nz,ui6
+	push	hl
+	ld	a,8
+	call	readbits
+	pop	de
+	add	hl,de
+ui6:	ld	de,(mml)
+	ld	d,0
+	add	hl,de
+	ld	b,h
+	ld	c,l
+	pop	hl
+	inc	hl
+	call	callback
+	jr	ui1
+;
+nextsymbol:
+	ld	(treep),hl
+nsloop:	push	hl
+	ld	a,1
+	call	readbits
+	pop	hl
+	or	a
+	jr	z,nsleft
+	inc	hl
+	inc	hl
+nsleft:	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+
+	ld	a,d
+	cp	10h
+	jr	nc,nsleaf
+	or	e
+	ret	z
+
+	ld	hl,(treep)
+	add	hl,de
+	add	hl,de
+	add	hl,de
+	add	hl,de
+	jr	nsloop
+
+nsleaf:	and	0fh
+	ld	d,a
+	ret
+;
+buildcode:
+	ld	(lenp),hl
+	ld	(nodes),de
+	ld	(nrsym),bc
+
+	ld	hl,blcnt
+	ld	de,blcnt + 1
+	ld	bc,2 * maxcl + 1
+	ld	(hl),b
+	ldir
+
+	ld	bc,(nrsym)
+	ld	de,(lenp)
+bclp1:	ld	a,(de)
+	add	a,a
+	jr	z,bcnol
+	ld	hl,blcnt
+	add	a,l
+	ld	l,a
+	jr	nc,bcnc1
+	inc	h
+bcnc1:	ld	a,(hl)
+	inc	a
+	ld	(hl),a
+	jr	nz,bcnol
+	inc	hl
+	inc	(hl)
+bcnol:	inc	de
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,bclp1
+
+	ld	hl,0
+	push	hl
+
+	ld	bc,1
+bclp2:	ld	a,c
+	sub	maxcl + 1
+	jr	nc,bccn2
+
+	ld	hl,blcnt
+	add	hl,bc
+	add	hl,bc
+	dec	hl
+	ld	d,(hl)
+	dec	hl
+	ld	e,(hl)
+
+	pop	hl
+	add	hl,de
+	add	hl,hl
+	push	hl
+
+	ex	de,hl
+	ld	hl,ncode
+	add	hl,bc
+	add	hl,bc
+	ld	(hl),e
+	inc	hl
+	ld	(hl),d
+
+	inc	c
+	jr	bclp2
+bccn2:	pop	hl
+
+	ld	hl,(nrsym)
+	add	hl,hl
+	add	hl,hl
+	ld	b,h
+	ld	c,l
+	ld	hl,(nodes)
+	ld	d,h
+	ld	e,l
+	inc	de
+	dec	bc
+	ld	(hl),0
+	ldir
+
+	ld	hl,1
+	ld	(nnode),hl
+
+	ld	bc,0
+bclp3:	ld	hl,(lenp)
+	add	hl,bc
+	ld	a,(hl)
+	or	a
+	jr	z,bccn3
+
+	push	bc
+
+	push	af
+	ld	hl,ncode
+	add	a,a
+	add	a,l
+	ld	l,a
+	jr	nc,bc4
+	inc	h
+bc4:	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	(bcode),de
+	inc	de
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	pop	af
+
+	ld	hl,1
+bclp4:	dec	a
+	or	a
+	jr	z,bccn4
+	add	hl,hl
+	jr	bclp4
+bccn4:	ld	(bmask),hl
+
+	ld	hl,(nodes)
+bclp5:	ld	de,(bcode)
+	ld	bc,(bmask)
+	ld	a,d
+	and	b
+	ld	d,a
+	ld	a,e
+	and	c
+	ld	e,a
+	or	d
+	jr	z,bcleft
+	inc	hl
+	inc	hl
+bcleft:	srl	b
+	rr	c
+	ld	(bmask),bc
+	ld	a,b
+	or	c
+	jr	z,bccn5
+
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ld	a,d
+	or	e
+	jr	nz,bc6
+	ld	de,(nnode)
+	ld	(hl),d
+	dec	hl
+	ld	(hl),e
+	inc	de
+	ld	(nnode),de
+	dec	de
+
+bc6:	ld	hl,(nodes)
+	add	hl,de
+	add	hl,de
+	add	hl,de
+	add	hl,de
+	jr	bclp5
+
+bccn5:	pop	bc
+
+	ld	(hl),c
+	inc	hl
+	ld	a,b
+	or	10h
+	ld	(hl),a
+
+bccn3:	inc	bc
+	ld	hl,(nrsym)
+	or	a
+	sbc	hl,bc
+	jr	nz,bclp3
+	ret
+;
+huffman:
+	ld	a,5
+	call	readbits
+	inc	a
+	ld	l,a
+	ld	h,1
+	ld	(hlit),hl
+
+	ld	a,5
+	call	readbits
+	inc	a
+	ld	(hdist),a
+
+	ld	a,4
+	call	readbits
+	add	a,4
+	ld	c,a
+
+	ld	b,0
+	ld	de,clord
+hmlp1:	ld	a,b
+	cp	c
+	jr	nc,hmcn1
+	push	bc
+	push	de
+	ld	a,3
+	call	readbits
+	pop	hl
+	ld	c,(hl)
+	ld	b,0
+	ex	de,hl
+	ld	hl,lenld
+	add	hl,bc
+	ld	(hl),a
+	pop	bc
+	inc	de
+	inc	b
+	jr	hmlp1
+
+hmcn1:	xor	a
+	ld	c,a
+hmlp2:	ld	a,b
+	cp	nrcl
+	jr	nc,hmcn2
+	ld	a,(de)
+	ld	hl,lenld
+	add	a,l
+	ld	l,a
+	jr	nc,hmnc2
+	inc	h
+hmnc2:	ld	(hl),c
+	inc	de
+	inc	b
+	jr	hmlp2
+
+hmcn2:	ld	hl,lenld
+	ld	de,cltr
+	ld	bc,nrcl
+	call	buildcode
+
+	ld	hl,(hlit)
+	ld	a,(hdist)
+	add	a,l
+	ld	c,a
+	ld	a,h
+	adc	a,0
+	ld	b,a
+	ld	hl,lenld
+hmlp3:	push	bc
+	push	hl
+	ld	hl,cltr
+	call	nextsymbol
+	ld	a,e
+
+	cp	010h
+	jr	nz,hmn16
+	ld	a,2
+	call	readbits
+	pop	hl
+	pop	bc
+	add	a,3
+	ld	d,a
+	dec	hl
+	ld	e,(hl)
+	inc	hl
+hmlp4:	ld	(hl),e
+	inc	hl
+	dec	bc
+	dec	d
+	jr	nz,hmlp4
+	jr	hmcn3
+
+hmn16:	cp	011h
+	jr	nz,hmn17
+	ld	a,3
+	call	readbits
+	pop	hl
+	pop	bc
+	add	a,3
+	ld	d,a
+	xor	a
+hmlp5:	ld	(hl),a
+	inc	hl
+	dec	bc
+	dec	d
+	jr	nz,hmlp5
+	jr	hmcn3
+
+hmn17:	cp	012h
+	jr	nz,hmn18
+	ld	a,7
+	call	readbits
+	pop	hl
+	pop	bc
+	add	a,11
+	ld	d,a
+	xor	a
+hmlp6:	ld	(hl),a
+	inc	hl
+	dec	bc
+	dec	d
+	jr	nz,hmlp6
+	jr	hmcn3
+
+hmn18:	pop	hl
+	pop	bc
+	ld	(hl),a
+	inc	hl
+	dec	bc
+
+hmcn3:	ld	a,b
+	or	c
+	jr	nz,hmlp3
+
+	ld	hl,lenld
+	ld	de,littr
+	ld	bc,(hlit)
+	call	buildcode
+
+	ld	hl,(hlit)
+	ld	de,lenld
+	add	hl,de
+	ld	de,disttr
+	ld	a,(hdist)
+	ld	c,a
+	ld	b,0
+	call	buildcode
+
+	ld	hl,(inbps)
+	ld	a,l
+	or	h
+	jr	z,hmnext
+	ld	(inbufp),hl
+	ld	a,(rdpts)
+	ld	(readpt),a
+	ld	a,(blfts)
+	ld	(bleft),a
+	ld	a,(bitbs)
+	ld	(bitbuf),a
+	ld	hl,counting
+	inc	(hl)
+
+hmnext:	ld	hl,littr
+	call	nextsymbol
+	ld	a,d
+	dec	a
+	or	e
+	ret	z
+	ld	a,(zipeof)
+	and	1
+	ret	nz
+
+	ld	a,d
+	or	a
+	jr	nz,hmsym
+	ld	a,e
+	call	outb
+	jr	hmnext
+
+hmsym:	dec	e
+	ld	d,0
+	ld	hl,lenex
+	add	hl,de
+	ld	a,(hl)
+	ld	hl,0
+	or	a
+	jr	z,hmnlen
+	push	de
+	call	readbits
+	pop	de
+hmnlen:	push	hl
+	ld	hl,lenbas
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	pop	de
+	add	hl,de
+	push	hl
+
+	ld	hl,disttr
+	call	nextsymbol
+	ld	hl,dstex
+	add	hl,de
+	ld	a,(hl)
+	ld	hl,0
+	or	a
+	jr	z,hmndst
+	push	de
+	call	readbits
+	pop	de
+hmndst:	push	hl
+	ld	hl,dstbas
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a
+	pop	de
+	add	hl,de
+
+	pop	bc
+	call	callback
+	jr	hmnext
+;
+undeflate:
+	ld	a,7fh
+	ld	(omask),a
+
+udloop:	ld	a,(zipeof)
+	and	1
+	ret	nz
+
+	ld	a,1
+	call	readbits
+	push	af
+
+	ld	a,2
+	call	readbits
+	or	a
+	jr	nz,udnt0
+
+	xor	a
+	ld	(bleft),a
+	ld	a,16
+	call	readbits
+	push	hl
+	ld	a,16
+	call	readbits
+	pop	bc
+	scf
+	adc	hl,bc
+	jr	nz,udblm
+
+udt0lp:	ld	a,b
+	or	c
+	jr	z,udnext
+	ld	a,(zipeof)
+	and	1
+	jr	nz,udpret
+	push	bc
+	call	getbyte
+	call	outb
+	pop	bc
+	dec	bc
+	jr	udt0lp
+
+udnt0:	dec	a
+	jr	nz,udnt1
+	ld	hl,(inbufp)
+	ld	(inbps),hl
+	ld	a,(readpt)
+	ld	(rdpts),a
+	ld	a,(bleft)
+	ld	(blfts),a
+	ld	a,(bitbuf)
+	ld	(bitbs),a
+	ld	hl,counting
+	dec	(hl)
+	ld	hl,static_pre
+	ld	(inbufp),hl
+	xor	a
+	ld	(readpt),a
+	ld	(bleft),a
+	call	huffman
+	jr	udnext
+
+udnt1:	dec	a
+	jr	nz,udubt
+	ld	hl,0
+	ld	(inbps),hl
+	call	huffman
+
+udnext:	pop	af
+	or	a
+	jr	z,udloop
+	ret
+
+udpret:	pop	af
+	ret
+udbskp:	ld	a,(zipeof)
+	and	1
+	jr	nz,udpret
+	call	getbyte
+	jr	udbskp
+udblm:	call	ilprt
+	db	'Block length mismatch\r\n\0'
+	jr	udbskp
+udubt:	call	ilprt
+	db	'Unknown block type\r\n\0'
+	jr	udbskp
+;
+; ckcon -- checks console for character; aborts if ^C
+;
+ckcon:	ld	e,0FFh		; check for character
+	ld	c,dircon
+	call	bdos
+	or	a
+	ret	z
+	cp	CtrlC		; ^C ?
+	ret	nz		; (no, continue)
+	ld	a,(curmode)	; are we writing a file?
+	or	a
+	jr	z,ckcon1	; (no)
+	call	setout
+ckcon0:	ld	de,opfcb
+	ld	c,fclose	; yes, close it
+	call	bdos
+	ld	de,opfcb
+	ld	c,ferase	; and delete it
+	call	bdos
+	call	ilprt
+	db	'Partial file erased -- ',0
+ckcon1:	call	ilprt
+	db	'Aborted',0
+	jp	exit
+;
+; getusr -- gets and stores source and destination users
+;
+getusr:	ld	hl,(Z3EAdr)	; ZCPR3?
+	ld	a,h
+	or	l
+	ret	z		; (no, skip this)
+	ld	a,(infcb+13)	; get source user
+	ld	(inusr),a
+	ld	a,(altfcb+13)	; get destination user
+	ld	(outusr),a
+	ret
+;
+; setin, setout -- logs to source or destination user
+;
+setin:	ld	a,(inusr)
+	jr	setbth
+;
+setout:	ld	a,(outusr)
+setbth:	ld	e,a
+	ld	hl,(Z3EAdr)	; ZCPR3?
+	ld	a,h
+	or	l
+	ret	z		; (no, skip this)
+	ld	c,setusr
+	jp	bdos		; = call bdos!ret
+;
+; usage -- show syntax for ZCPR3 ("dir:") or vanilla CP/M ("d:")
+;
+usage:	call	ilprt
+	db	'Usage:',CR,LF
+	db	'   UNZIP {d',0
+	ld	hl,(Z3EAdr)
+	ld	a,h
+	or	l
+	jr	z,usage2
+	call	ilprt
+	db	'ir',0
+usage2:	call	ilprt
+	db	':}zipfile {d',0
+	ld	hl,(Z3EAdr)
+	ld	a,h
+	or	l
+	jr	z,usage3
+	call	ilprt
+	db	'ir',0
+usage3:	call	ilprt
+	db	':}{afn.typ}',CR,LF
+	db	'If a destination is given, files are extracted.',CR,LF
+	db	'If not, files are checked and listed.',0
+	jp	exit
+;
+; data storage . . .
+;	
+zipeof:	db	2
+counting:
+	db	0
+init:
+	db	0
+	db	0
+	dw	0,0
+	dw	-1,-1
+endinit:
+inbufp:	dw	0080h
+readpt:	db	80h
+omask:	db	1fh
+_L_table:
+	db	7fh, 3fh, 1fh, 0fh
+_D_shift:
+	db	07h, 06h, 05h, 04h
+clord:	db	16, 17, 18
+	db	0, 8
+	db	7, 9
+	db	6, 10
+	db	5, 11
+	db	4, 12
+	db	3, 13
+	db	2, 14
+	db	1, 15
+lenbas:	dw	3, 4
+	dw	5, 6
+	dw	7, 8
+	dw	9, 10
+	dw	11, 13
+	dw	15, 17
+	dw	19, 23
+	dw	27, 31
+	dw	35, 43
+	dw	51, 59
+	dw	67, 83
+	dw	99, 115
+	dw	131, 163
+	dw	195, 227
+	dw	258
+lenex:	db	0, 0
+	db	0, 0
+	db	0, 0
+	db	0, 0
+	db	1, 1
+	db	1, 1
+	db	2, 2
+	db	2, 2
+	db	3, 3
+	db	3, 3
+	db	4, 4
+	db	4, 4
+	db	5, 5
+	db	5, 5
+	db	0
+dstbas:	dw	1, 2
+	dw	3, 4
+	dw	5, 7
+	dw	9, 13
+	dw	17, 25
+	dw	33, 49
+	dw	65, 97
+	dw	129, 193
+	dw	257, 385
+	dw	513, 769
+	dw	1025, 1537
+	dw	2049, 3073
+	dw	4097, 6145
+	dw	8193, 12289
+	dw	16385, 24577
+dstex:	db	0, 0
+	db	0, 0
+	db	1, 1
+	db	2, 2
+	db	3, 3
+	db	4, 4
+	db	5, 5
+	db	6, 6
+	db	7, 7
+	db	8, 8
+	db	9, 9
+	db	10, 10
+	db	11, 11
+	db	12, 12
+	db	13, 13
+static_pre:
+	db	0ffh, 05bh, 000h, 06ch, 003h, 036h, 0dbh, 0b6h
+	db	06dh, 0dbh, 0b6h, 06dh, 0dbh, 0b6h, 0cdh, 0dbh
+	db	0b6h, 06dh, 0dbh, 0b6h, 06dh, 0dbh, 0a8h, 06dh
+	db	0ceh, 08bh, 06dh, 03bh
+;
+; uninitialized storage
+;
+oldstk:	ds	2
+inusr:	ds	1
+outusr:	ds	1
+mode:	ds	1
+junk:	ds	STRSIZ
+lfh:
+vnte:	ds	2
+gpbf:	ds	2
+cm:	ds	2
+lmft:	ds	2
+lmfd:	ds	2
+crc:	ds	4
+cs:	ds	4
+ucs:	ds	4
+fnl:	ds	2
+efl:	ds	2
+endlfh:	ds	1
+opfcb:	ds	1		; output file control block
+opfn:	ds	8
+opext:	ds	3
+	ds	24
+mtchfcb:
+	ds	11
+bitbuf:	ds	1
+vars:
+bleft:	ds	1
+wrtpt:	ds	1
+outpos:	ds	4
+crc32:	ds	4
+curmode:
+	ds	1
+opbuf:	ds	128
+L_table:
+	ds	1
+D_shift:
+	ds	1
+V:	ds	1
+nchar:	ds	1
+lchar:	ds	1
+ExState:
+	ds	1
+Len:	ds	2
+ltp:	ds	1
+mml:	ds	1
+dictb:	ds	1
+noswps:	ds	1
+entrs:	ds	2
+lbl:	ds	1
+treep:	ds	2
+lenp:	ds	2
+nodes:	ds	2
+nrsym:	ds	2
+nnode:	ds	2
+bcode:	ds	2
+bmask:	ds	2
+blcnt:	ds	2 * maxcl + 2
+ncode:	ds	2 * maxcl + 2
+hlit:	ds	2
+hdist:	ds	1
+inbps:	ds	2
+rdpts:	ds	1
+bitbs:	ds	1
+blfts:	ds	1
+oldcode:
+	ds	2
+offset:	ds	2
+codesize:
+	ds	1
+maxcode:
+	ds	2
+free_ent:
+	ds	2
+finchar:
+	ds	1
+stackp:	ds	2
+incode:	ds	2
+code:	ds	2
+outbuf:
+suffix_of:
+	ds	8192
+prefix_of:
+Slen:
+lit_tree:
+	ds	_sf_tree_
+len_tree:
+	ds	_sf_tree_
+dist_tre:
+	ds	_sf_tree_
+	ds	16384 + 2 - (3 * _sf_tree_)
+followers:
+stack:	ds	8192 - 2
+lenld:	ds	nrlit + nrdist
+cltr:	ds	4 * nrcl
+littr:	ds	4 * nrlit
+disttr:	ds	4 * nrdist
+endtr:
+	ds	8192 + 2 - (endtr - lenld)
+
+	end
