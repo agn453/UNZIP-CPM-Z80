@@ -2037,10 +2037,10 @@ udbskp:	ld	a,(zipeof)
 	call	getbyte
 	jr	udbskp
 udblm:	call	ilprt
-	db	'Block length mismatch\r\n\0'
+	db	'Block length mismatch',CR,LF,0
 	jr	udbskp
 udubt:	call	ilprt
-	db	'Unknown block type\r\n\0'
+	db	'Unknown block type',CR,LF,0
 	jr	udbskp
 ;
 ; ckcon -- checks console for character; aborts if ^C

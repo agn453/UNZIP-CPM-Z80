@@ -43,6 +43,7 @@ Bug Fixes and Enhancements
 --------------------------
 
 September 2020
+--------------
 
 Martin has posted some more updates and added support to decompress
 ZIP file entries compressed with the Deflate algorithm.
@@ -53,7 +54,7 @@ The changelog is -
 
 * Skip to the next file header if the compression method is unknown
 
-* Fix readbits when a full word (16 bits) is read (in preparation
+* Fix readbits when a full word (16 bits) is read - in preparation
 for implementing the unDeflate algorithm.
 
 * Fix mis-ordering of variables.  Code makes the assumption
@@ -78,6 +79,7 @@ produce a similarly updated UNZIP Version 1.8-2 soon.
 
 
 June 2020
+---------
 
 Recently Martin posted two bug fixes to the unshrink and unimplode
 routines in the comp.os.cpm USENET group that fix two long outstanding
