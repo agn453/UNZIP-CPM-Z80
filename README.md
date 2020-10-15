@@ -4,22 +4,21 @@ UNZIP for CP/M Z80
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
-It can _only_ be used to unpack ZIP files whose contents have been
-compressed by PKZip for MS-DOS Version 1.x.
+Support has been added for the Deflate algorithm since V1.5-2
+so that decompression of archives created with MS-DOS PKzip 2.04g
+and Info-ZIP (the open-source version of ZIP that's used by
+Unix/Linux and included with Microsoft Windows and macOS)
+can now be extracted.
 
-Files Stored without compression can always be extracted.
+(Older versions of the CP/M UNZIP program can _only_ be used to unpack
+ZIP files whose contents have been compressed by PKZip for MS-DOS
+Version 1.x.)
 
-It DOES NOT support the memory-intensive Deflate algorithm implemented
-by PKzip 2.04g and Info-ZIP (the open-source version of ZIP that's
-used by Unix/Linux and included with Microsoft Windows and macOS).
-
-UPDATE: Support has been added for Deflate - see the September 2020
-enhancement version V1.5-2 below.
 
 Background
 ----------
 
-The files have been extracted from the following distribution archives.
+Files have been extracted from the following distribution archives -
 
 * UNZIP15.LBR from the Public Domain software library originally
 distributed on 1-Jun-1991 as Version 1.5. I obtained this from
@@ -41,6 +40,28 @@ http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/jsage/znode3/uploads
 
 Bug Fixes and Enhancements
 --------------------------
+
+In reverse chronological order.
+
+October 2020
+------------
+
+Russell Marks has contributed speed optimisations to the UnDeflate
+algorithm to significantly boost performance (by more than 30%).
+
+* A new routine rdbybits now processes eight or fewer bits.
+
+* Checks whether the TPA size is large enough for UNZIP's tables
+
+* Use a table-based CRC for UnDeflate.  This increases the CP/M
+binary size by about 1Kbyte.
+
+I've bumped the version number to 1.5-3 and the latest
+updated sourcefile as *UNZIP153.Z80*.  The source and CP/M binary
+are also available in a CP/M format library file from
+
+https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip153.lbr
+
 
 September 2020
 --------------
@@ -100,10 +121,7 @@ postings at the Google Groups archive of the comp.os.cpm newsgroup -
 
 * Un-implode fix https://groups.google.com/forum/#!topic/comp.os.cpm/rpjA1Q6RtDc
 
-Latest Release
---------------
-
-A new Z80 CP/M executable has been built using Hector Peraza's ZSM4
+The new Z80 CP/M executable has been built using Hector Peraza's ZSM4
 assembler(1) and Digital Research's LINK as *UNZIP151.COM* using the
 following commands -
 
