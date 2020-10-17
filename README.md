@@ -4,15 +4,15 @@ UNZIP for CP/M Z80
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
-Support has been added for the Deflate algorithm since V1.5-2
+**LATEST NEWS:** Support has been added for the Deflate algorithm since V1.5-2
 so that decompression of archives created with MS-DOS PKzip 2.04g
 and Info-ZIP (the open-source version of ZIP that's used by
 Unix/Linux and included with Microsoft Windows and macOS)
 can now be extracted.
 
 (Older versions of the CP/M UNZIP program can _only_ be used to unpack
-ZIP files whose contents have been compressed by PKZip for MS-DOS
-Version 1.x.)
+ZIP files whose contents have been compressed or stored by PKZip for
+MS-DOS Version 1.x.)
 
 
 Background
@@ -53,14 +53,15 @@ algorithm to significantly boost performance (by more than 30%).
 
 * Checks whether the TPA size is large enough for UNZIP's tables
 
-* Use a table-based CRC for UnDeflate.  This increases the CP/M
+* Use a table-based CRC algorithm.  This increases the CP/M
 binary size by about 1Kbyte.
 
 I've bumped the version number to 1.5-3 and the latest
 updated sourcefile as *UNZIP153.Z80*.  The source and CP/M binary
 are also available in a CP/M format library file from
 
-https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip153.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip153.lbr
+
 
 
 September 2020

@@ -16,7 +16,7 @@ Revisn	equ	3		;;v1.5-3
 ;	Cosmetic change the "V" label to "urV" for assembly with
 ;	zmac under Unix.
 ;	Output a message when there is insufficient TPA available.
-;	Use a table-based CRC for UnDeflate.  This increases
+;	Use a table-based CRC algorithm.  This increases
 ;	code size by about 1Kbyte and boosts the speed by more
 ;	than 30% compared to version 1.5-2.
 ;
