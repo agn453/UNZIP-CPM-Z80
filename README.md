@@ -1,6 +1,4 @@
-# UNZIP-CPM-Z80
-UNZIP for CP/M Z80
-==================
+# UNZIP for CP/M Z80
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
@@ -31,8 +29,6 @@ In reverse chronological order.
 Some further speed optimisations by Russell Marks.
 
 * Further slight optimisations to bit-readers,
-
-* Fix long-filename buffer overrun,
 
 * Backport some unzip 1.8 changes (buffer-overrun fixes, bit 7 strip on
 output filenames, less frequent ^C checking, and low-memory message),
