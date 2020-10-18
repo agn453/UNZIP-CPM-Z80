@@ -4,7 +4,14 @@ UNZIP for CP/M Z80
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
-**LATEST NEWS:** Support has been added for the Deflate algorithm since V1.5-2
+**LATEST NEWS:**  Further speed optimisations.
+
+The latest release is V1.5-4 and may be downloaded in CP/M library
+file format from -
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
+
+Support has been added for the Deflate algorithm (since V1.5-2)
 so that decompression of archives created with MS-DOS PKzip 2.04g
 and Info-ZIP (the open-source version of ZIP that's used by
 Unix/Linux and included with Microsoft Windows and macOS)
@@ -15,36 +22,37 @@ ZIP files whose contents have been compressed or stored by PKZip for
 MS-DOS Version 1.x.)
 
 
-Background
-----------
-
-Files have been extracted from the following distribution archives -
-
-* UNZIP15.LBR from the Public Domain software library originally
-distributed on 1-Jun-1991 as Version 1.5. I obtained this from
-the Walnut Creek CP/M Software CD-ROM at
-
-http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/cpm/utils/arc-lbr/unzip15.lbr
-
-Version 1.5 incorporates modifications by Howard Goldstein on 1-Jun-1991
-plus those by Bruce Morgan on 16-May-1991 (Version 1.4) and Gene
-Pizzetta on 12-May-1991 (version 1.3); and includes the original
-Version 1.2 source-code by David Goodenough dated 3-Jul-1990.
-
-* UNZIP18.LBR has further modifications by Howard Goldstein for
-Z-system (ZCPR 3.x) with improved file I/O performance and buffering. It
-was obtained from
-
-http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/jsage/znode3/uploads/unzip18.lbr
-
-
-Bug Fixes and Enhancements
---------------------------
+## Bug Fixes and Enhancements
 
 In reverse chronological order.
 
-October 2020
-------------
+### October 18, 2020
+
+Some further speed optimisations by Russell Marks.
+
+* Further slight optimisations to bit-readers,
+
+* Fix long-filename buffer overrun,
+
+* Backport some unzip 1.8 changes (buffer-overrun fixes, bit 7 strip on
+output filenames, less frequent ^C checking, and low-memory message),
+and add various comments.
+
+* Use self-modifying code with an unrolled end loop in rdbybits,
+and add a "rd1bit" macro, for about a 12% speed improvement
+on overall extraction time compared to version 1.5-3.
+
+* Fix long-filename buffer overrun, for filenames longer than
+255 characters.
+
+* Backport Howard Goldstein's buffer-overrun fixes from
+unzip 1.8 - previously, a 255-byte buffer was repeatedly used
+to read up-to-65535-byte inputs.
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
+
+
+### October 15, 2020
 
 Russell Marks has contributed speed optimisations to the UnDeflate
 algorithm to significantly boost performance (by more than 30%).
@@ -63,9 +71,7 @@ are also available in a CP/M format library file from
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip153.lbr
 
 
-
-September 2020
---------------
+### September 2020
 
 Martin has posted some more updates and added support to decompress
 ZIP file entries compressed with the Deflate algorithm.
@@ -93,15 +99,14 @@ https://github.com/keirf/Amiga-Stuff/blob/master/inflate/degzip_portable.c
 You'll find the updated sourcefile as *UNZIP152.Z80* which you
 can also get in a CP/M format library file from
 
-https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip152.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip152.lbr
 
 NOTE: The diff files provided by Martin were unable to be applied
 for the later releases.  I'll see if I can apply them manually to
 produce a similarly updated UNZIP Version 1.8-2 soon.
 
 
-June 2020
----------
+### June 2020
 
 Recently Martin posted two bug fixes to the unshrink and unimplode
 routines in the comp.os.cpm USENET group that fix two long outstanding
@@ -134,13 +139,13 @@ link unzip151
 A new library file (without compressed entries) containing the fixes
 is _unzip151.lbr_ and can be downloaded from
 
-https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip151.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip151.lbr
 
 
 Also, the new Z-system (ZCPR 3.x) UNZIP Version 1.8-1 is in the
 library _unzip181.lbr_ and can be downloaded from
 
-https://github.com/agn453/UNZIP-CPM-Z80/blob/master/unzip/unzip181.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip181.lbr
 
 The Z-system version has been built using the submit file (also included
 as _UNZIP181.SUB_) -
@@ -156,8 +161,29 @@ slrnk /a:0e7c,/p:100,unzip181,unzip181/n/e
 ```
 
 
-Notes
------
+## Background
+
+Files have been extracted from the following distribution archives -
+
+* UNZIP15.LBR from the Public Domain software library originally
+distributed on 1-Jun-1991 as Version 1.5. I obtained this from
+the Walnut Creek CP/M Software CD-ROM at
+
+http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/cpm/utils/arc-lbr/unzip15.lbr
+
+Version 1.5 incorporates modifications by Howard Goldstein on 1-Jun-1991
+plus those by Bruce Morgan on 16-May-1991 (Version 1.4) and Gene
+Pizzetta on 12-May-1991 (version 1.3); and includes the original
+Version 1.2 source-code by David Goodenough dated 3-Jul-1990.
+
+* UNZIP18.LBR has further modifications by Howard Goldstein for
+Z-system (ZCPR 3.x) with improved file I/O performance and buffering. It
+was obtained from
+
+http://www.classiccmp.org/cpmarchives/cpm/Software/WalnutCD/jsage/znode3/uploads/unzip18.lbr
+
+
+## Notes
 
 Other Zilog Z80 assemblers/linkers can also be used (e.g. SLR Z80ASM/SLRNK
 or even Microsoft M80/L80) - however, they may create
