@@ -7,6 +7,7 @@ README.md text eol=crlf
 *.COM binary
 *.SUB text eol=crlf
 *.lbr binary
+*.LBR binary
 *.for text eof=crlf linguist-language=Assembly
 *.FOR text eof=crlf linguist-language=Assembly
 *.toc text eof=crlf

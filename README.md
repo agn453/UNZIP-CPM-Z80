@@ -4,16 +4,16 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  Further speed optimisations.
 
-The latest release is V1.5-4 (CP/M) or V1.8-2 (Z-system) and may be
+The latest release is V1.5-4 (CP/M) or V1.8-4 (Z-system) and may be
 downloaded in CP/M library file format from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
 
 or
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip182.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip184.lbr
 
-Support has been added for the Deflate algorithm (since V1.5-2)
+Support has been added for the Deflate algorithm (since V1.5-2 and V1.8-2)
 so that decompression of archives created with MS-DOS PKzip 2.04g
 and Info-ZIP (the open-source version of ZIP that's used by
 Unix/Linux and included with Microsoft Windows and macOS)
@@ -27,6 +27,33 @@ MS-DOS Version 1.x.)
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### October 31, 2000
+
+Lars Nelson has ported the v1.5-4 updates to the Z-system version (with
+the exception of the >255 character filename check).  As usual, the 
+individual files are un the unzip folder or grab the v1.8-4 version
+in a CP/M .LBR file from
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip184.lbr
+
+I've also included the Z-system libraries in their original distribution
+format .LBR files (should you wish to rebuild from source code).  They are
+
+* [LIBS45A.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/LIBS45A.LBR) - the
+library containing .REL versions of SYSLIB, Z3LIB and DSLIB in both
+Microsoft and SLR format.
+
+* [ZSLIB36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLIB36.LBR) - the
+supplemental routines for programmers.
+
+* [ZSLHLP36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLHLP36.LBR) - the
+help files for ZSLIB36.LBR
+
+For testing, I re-linked UNZIP184.COM natively under Z3PLUS Vers. 1.02
+(the Z-system variant for CP/M-Plus) using the ZSM4 assembler and Digital
+Research's LINK using the submit file UNZIP184.SUB.
+
 
 ### October 30, 2020
 
@@ -111,10 +138,6 @@ You'll find the updated sourcefile as *UNZIP152.Z80* which you
 can also get in a CP/M format library file from
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip152.lbr
-
-NOTE: The diff files provided by Martin were unable to be applied
-for the later releases.  I'll see if I can apply them manually to
-produce a similarly updated UNZIP Version 1.8-2 soon.
 
 
 ### June 2020
