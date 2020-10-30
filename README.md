@@ -4,10 +4,14 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  Further speed optimisations.
 
-The latest release is V1.5-4 and may be downloaded in CP/M library
-file format from -
+The latest release is V1.5-4 (CP/M) or V1.8-2 (Z-system) and may be
+downloaded in CP/M library file format from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
+
+or
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip182.lbr
 
 Support has been added for the Deflate algorithm (since V1.5-2)
 so that decompression of archives created with MS-DOS PKzip 2.04g
@@ -23,6 +27,17 @@ MS-DOS Version 1.x.)
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### October 30, 2020
+
+Lars Nelson has ported the v1.5-2 bug fixes and UnDeflate enhancements
+to the Z-system (ZCPR 3.x) branch, resulting in v1.8-2.
+
+Based on initial testing, this version (using a 2K buffer and Z-system
+libraries) has better performance than v1.5-2 (and later).
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip182.lbr
+
 
 ### October 18, 2020
 
