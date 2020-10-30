@@ -32,7 +32,7 @@ In reverse chronological order.
 
 Lars Nelson has ported the v1.5-4 updates to the Z-system version (with
 the exception of the >255 character filename check).  As usual, the 
-individual files are un the unzip folder or grab the v1.8-4 version
+individual files are in the unzip folder or grab the v1.8-4 version
 in a CP/M .LBR file from
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip184.lbr
