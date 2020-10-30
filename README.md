@@ -28,7 +28,7 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
-### October 31, 2000
+### October 31, 2020
 
 Lars Nelson has ported the v1.5-4 updates to the Z-system version (with
 the exception of the >255 character filename check).  As usual, the 
