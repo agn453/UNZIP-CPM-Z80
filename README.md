@@ -42,7 +42,7 @@ format .LBR files (should you wish to rebuild from source code).  They are
 
 * [LIBS45A.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/LIBS45A.LBR) - the
 library containing .REL versions of SYSLIB, Z3LIB and DSLIB in both
-Microsoft and SLR format.
+Microsoft M80/DR LINK and SLRNK file formats.
 
 * [ZSLIB36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLIB36.LBR) - the
 supplemental routines for programmers.
