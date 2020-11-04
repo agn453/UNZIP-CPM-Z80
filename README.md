@@ -28,10 +28,13 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
-### November 3, 2020
+### November 4, 2020
 
 Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4
 version.  Updated UNZIP184.Z80, the binary and library for this version only.
+Also included an updated version of
+[ZIPDIR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir.lbr)
+to correctly report .ZIP file entries compressed with the Deflate method.
 
 
 ### October 31, 2020
