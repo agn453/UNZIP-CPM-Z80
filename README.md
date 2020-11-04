@@ -28,6 +28,12 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### November 3, 2020
+
+Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4
+version.  Updated UNZIP184.Z80, the binary and library for this version only.
+
+
 ### October 31, 2020
 
 Lars Nelson has ported the v1.5-4 updates to the Z-system version (with
@@ -56,12 +62,6 @@ help files for ZSLIB36.LBR
 For testing, I re-linked UNZIP184.COM natively under Z3PLUS Vers. 1.02
 (the Z-system variant for CP/M-Plus) using the ZSM4 assembler and Digital
 Research's LINK using the submit file UNZIP184.SUB.
-
-
-### November 3, 2020
-
-Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4
-version.  Updated UNZIP184.Z80, the binary and library for this version only.
 
 
 ### October 30, 2020
