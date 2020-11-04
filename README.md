@@ -59,9 +59,6 @@ help files for LIBS45A.LBR
 * [ZSLIB36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLIB36.LBR) - the
 supplemental routines for programmers.
 
-* [ZSLHLP36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLHLP36.LBR) - the
-help files for ZSLIB36.LBR
-
 For testing, I re-linked UNZIP184.COM natively under Z3PLUS Vers. 1.02
 (the Z-system variant for CP/M-Plus) using the ZSM4 assembler and Digital
 Research's LINK using the submit file UNZIP184.SUB.
