@@ -37,12 +37,15 @@ in a CP/M .LBR file from
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip184.lbr
 
-I've also included the Z-system libraries in their original distribution
+I've also included the Z-system libraries in their original binary distribution
 format .LBR files (should you wish to rebuild from source code).  They are
 
 * [LIBS45A.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/LIBS45A.LBR) - the
 library containing .REL versions of SYSLIB, Z3LIB and DSLIB in both
 Microsoft M80/DR LINK and SLRNK file formats.
+
+* [LBRHL45A.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/LBRHL45A.LBR) - the
+help files for LIBS45A.LBR
 
 * [ZSLIB36.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZSLIB36.LBR) - the
 supplemental routines for programmers.
@@ -53,6 +56,12 @@ help files for ZSLIB36.LBR
 For testing, I re-linked UNZIP184.COM natively under Z3PLUS Vers. 1.02
 (the Z-system variant for CP/M-Plus) using the ZSM4 assembler and Digital
 Research's LINK using the submit file UNZIP184.SUB.
+
+
+### November 3, 2020
+
+Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4
+version.  Updated UNZIP184.Z80, the binary and library for this version only.
 
 
 ### October 30, 2020

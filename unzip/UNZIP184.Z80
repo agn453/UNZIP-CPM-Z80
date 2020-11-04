@@ -2,6 +2,7 @@
 ;
 ;	Dissolves MS-DOS ZIP files.
 ;
+	.z80
 Vers	equ	18
 Revisn	equ	4	;;v1.8-4
 ;
@@ -122,7 +123,7 @@ Revisn	equ	4	;;v1.8-4
 ;
 FALSE	equ	0
 TRUE	equ	not FALSE
-debug	equ	TRUE
+debug	equ	FALSE
 ; User equates
 ;
 	 if	DEBUG
@@ -198,12 +199,8 @@ CtrlZ	equ	1Ah
 Z3EAdr:	dw	0
 ;
 start:
-;	 if	DEBUG
-;	ld	sp,0A800h
-;	 else
 	ld	(oldstk),sp	; save old stack here for future use
 	ld	sp,locstk	; set the local stack pointer
-;	 endif
 	call	ilprt
 	db	'UNZIP Version '
 	db	Vers/10+'0','.',Vers mod 10+'0'
@@ -223,11 +220,7 @@ wasfil:	ld	hl,0
 ; and input buffer size is either remaining memory or Ibfmax, whichever is
 ; less.
 ;
-;	 if	DEBUG
-;	ld	hl,0A800h
-;	 else
 	ld	hl,($memry)	; top of dseg
-;	 endif
 	ld	(opbuf),hl	; store as output buffer address
 	ld	de,obfsiz shl 8	; output buffer size (pages)
 	ld	a,d
@@ -504,11 +497,11 @@ noex:	call	ilprt
 	jp	resmod
 ;
 extrct:	xor	a
-	ld	(zipeof),a
+	ld	(zipeof),a	; clear eof flag
 	ld	a,(curmode)
 	or	a
-	jr	nz,doext
-	jr	pjunk
+	jr	nz,doext	; extact file
+	jr	pjunk		; skip file
 ;
 creok:	ld	de,ocb		; create output file
 ;	call	fxwopen
@@ -532,48 +525,45 @@ doext:	ld	hl,counting
 	jr	z,case0x
 	call	ilprt
 	db	' -- ',0
-	 if	false ;not debug
-	ld	hl,(cs)
-	ld	de,(cs + 2)
-	ld	a,d
-	or	e
-	or	h
-	or	l
-	ld	hl,zipeof
-	jr	nz,neof
-	inc	(hl)
-neof:	inc	hl
-	inc	(hl)
-	 endif
-	ld	a,(cm)
+	ld	a,(cm)		; get compression method
 	or	a
 	jr	nz,case1
+; file is stored - first check for zero length file
+	ld	hl,(cs)
+	ld	de,(cs+2)
+	ld	a,l
+	or	h
+	or	e
+	or	d
+	jr	nz,case0w
+	ld	hl,zipeof
+	inc	(hl)
 	jr	case0w
 case0x:	ld	a,(nodest)
 	or	a
 	call	z,wildck
-case0w:	ld	a,(zipeof)
-	and	1
+case0w:	ld	a,(zipeof)	; get eof flag
+	and	1		; is it odd ie eof
 	jr	nz,closeo
 savcs0:	call	getbyte
 	call	outbyte
 	jr	case0w
-;
+; is file shrunk
 case1:	dec	a
 	jr	nz,case2p
 	call	unshrink
 	jr	closeo
-;
+; is file reduced
 case2p:	dec	a
 	cp	4
 	jr	nc,tryimp
 	call	unreduce
 	jr	closeo
-;
+; is file imploded
 tryimp:	jr	nz,trydfl
 	call	unimplode
 	jr	closeo
-;
+; is file deflated
 trydfl:	cp	6
 	jr	nz,badzip
 	call	undeflate
@@ -581,22 +571,22 @@ trydfl:	cp	6
 ;
 badzip:	call	ilprt
 	db	'Unknown compression method',CR,LF,0
-badskp:	ld	a,(zipeof)
-	and	1
+badskp:	ld	a,(zipeof)	; get eof flag
+	and	1		; is it odd
 	jr	nz,closeo
 	call	getbyte
 	jr	badskp
 	ret
 ;
-closeo:	ld	hl,zipeof
-	dec	(hl)
-	inc	hl
-	dec	(hl)
-	ld	a,(curmode)
+closeo:	ld	hl,zipeof	; point to eof flag
+	dec	(hl)		; decrement it
+	inc	hl		; point to counting
+	dec	(hl)		; decrement it
+	ld	a,(curmode)	; check mode for this file
 	or	a
-	jr	nz,close1
+	jr	nz,close1	; close output file if extracting
 ;	jr	z,nocls
-	call	ilprt
+	call	ilprt		; move on to next file
 	db	cr,lf,0
 	ret
 close1:	ld	de,ocb
@@ -641,8 +631,8 @@ wildck:
 getchla:
 	call	getcode
 	ld	(code),hl
-	ld	a,(zipeof)
-	and	1
+	ld	a,(zipeof)	; get eof flag
+	and	1		; test for odd
 	ret
 ;
 savstk:	ld	hl,(stackp)
@@ -730,7 +720,6 @@ rd1bit	macro
 	ld	l,a		;; (1 byte)  new bitbuf
 	ld	h,7		;; (2 bytes) 8 bits left, pre-dec'd
 ??0001:	xor	a		;; jp op above jumps here
-;	xor	a		;; jp op above jumps here
 	rr	l
 	ld	(bitbuf),hl	;; update bitbuf/bleft
 	ld	h,a		;; A still zero
@@ -812,34 +801,34 @@ getbyte:
 	ld	a,(counting)
 	or	a
 	jr	nz,dodci
-	ld	a,(zipeof)
-	and	1
+	ld	a,(zipeof)	; get eof flag
+	and	1		; test if odd ie set
 	ld	a,CtrlZ
-	ret	nz
+	ret	nz		; at eof so return CtrlZ
 	jr	skpdci
 dodci:
-	ld	hl,(cs)
+	ld	hl,(cs)		; get compressed file size
 	ld	de,(cs + 2)
 	ld	a,d
-	or	e
+	or	e		; test if zero length file
 	or	h
 	or	l
-	jr	nz,noteof
+	jr	nz,noteof	; jmp if length not 0
 	ld	hl,zipeof
-	inc	(hl)
-	ld	a,CtrlZ
+	inc	(hl)		; set eof
+	ld	a,CtrlZ		; and return a CtrlZ
 	ret
 ;
-noteof:	ld	a,h
+noteof:	ld	a,h		; decrement compressed file size
 	or	l
 	dec	hl
-	ld	(cs),hl
-	jr	nz,skpdci
+	ld	(cs),hl		; low order word
+	jr	nz,skpdci	; do we need to borrow
 	dec	de
-	ld	(cs + 2),de
+	ld	(cs + 2),de	; save high order word
 skpdci:	call	ckcon		; check console for abort
 	ld	de,icb
-	call	fxget
+	call	fxget		; get a byte from zip file
 	ret	nz
 	ld	a,CtrlZ
 	ret
@@ -868,7 +857,7 @@ nopos:	pop	af
 outbyte:
 	push	af
 	call	updcrc
-	ld	hl,(ucs)
+nocrc:	ld	hl,(ucs)	; decrement uncompressed file size
 	ld	de,(ucs + 2)
 	ld	a,h
 	or	l
@@ -877,12 +866,12 @@ outbyte:
 	jr	nz,tsthl0
 	dec	de
 	ld	(ucs + 2),de
-tsthl0:	ld	a,h
+tsthl0:	ld	a,h		; test if zero
 	or	l
 	or	d
 	or	e
 	jr	nz,noeof
-	ld	hl,zipeof
+	ld	hl,zipeof	; set eof flag
 	inc	(hl)
 noeof:	ld	a,(curmode)
 	or	a
@@ -962,9 +951,9 @@ sol:	ld	(hl),c
 	call	outbyte
 unshlp:	ld	hl,stack
 	ld	(stackp),hl
-	ld	a,(zipeof)
+	ld	a,(zipeof)	; test if eof reached
 	and	1
-	ret	nz
+	ret	nz		; return if not
 clrlp:	call	z,getchla
 	ret	nz
 	ld	a,h
@@ -1214,7 +1203,7 @@ unreduce:
 	ld	(ExState),a
 	ld	(lchar),a
 	call	loadfollowers
-ur1:	ld	a,(zipeof)
+ur1:	ld	a,(zipeof)	; test if eof reached
 	and	1
 	ret	nz
 	call	slenlch
@@ -1656,7 +1645,7 @@ unimplode:
 	ld	a,1fh
 	ld	(omask),a
 	call	ldtrees
-ui1:	ld	a,(zipeof)
+ui1:	ld	a,(zipeof)	; test if eof
 	and	1
 	ret	nz
 	inc	a
@@ -2079,7 +2068,7 @@ hmnext:	ld	hl,littr
 	dec	a
 	or	e
 	ret	z
-	ld	a,(zipeof)
+	ld	a,(zipeof)	; test if eof
 	and	1
 	ret	nz
 
@@ -2143,7 +2132,7 @@ undeflate:
 	ld	a,7fh
 	ld	(omask),a
 
-udloop:	ld	a,(zipeof)
+udloop:	ld	a,(zipeof)	; test if eof
 	and	1
 	ret	nz
 
@@ -2170,7 +2159,7 @@ udloop:	ld	a,(zipeof)
 udt0lp:	ld	a,b
 	or	c
 	jr	z,udnext
-	ld	a,(zipeof)
+	ld	a,(zipeof)	; test if eof
 	and	1
 	jr	nz,udpret
 	push	bc
@@ -2213,7 +2202,7 @@ udnext:	pop	af
 
 udpret:	pop	af
 	ret
-udbskp:	ld	a,(zipeof)
+udbskp:	ld	a,(zipeof)	; test if eof
 	and	1
 	jr	nz,udpret
 	call	getbyte
@@ -2524,8 +2513,8 @@ crc32tab:	; crc32_tab[] from degzip_portable.c, takes 1k
 
 oldstk:	ds	2
 mode:	ds	1
-zipeof:	ds	1
-counting:
+zipeof:	ds	1		; eof flag, odd=>set, even=>clear
+counting:			; must follow zipeof - don't move
 	ds	1
 junk:	ds	STRSIZ
 lfh:				; data read from local file header
