@@ -28,6 +28,20 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### November 11, 2020
+
+Lars Nelson has fixed an UnDeflate issue as well as added code to strip
+pathnames from filenames and clear bit 7 of filename characters.
+This version builds with the supplied UNZIP184.SUB (for ZSM4 and DR LINK)
+or SLR184.SUB (using SLR Z80ASM and SLRNK).
+
+Once again, I've updated the source and library file (still at v1.8-4)
+so fetch a new copy if you've an older version.
+
+Lars is working on code to preserve the .ZIP file dates under CP/M Plus
+and handling long file names.
+
+
 ### November 4, 2020
 
 Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4

@@ -1,0 +1,9 @@
+; Build new version of UNZIP184 using SLR Z80ASM and SLRNK
+; using Z-System libraries from LIB45A.LBR and ZSLIB36.LBR
+;
+; (I use the M80 versions of the libraries - so strip
+; symbols to 6 characters)
+z80asm unzip184/6
+; Load ASEG after CSEG - verify CSEG size is 1684h
+; and use ASEG at 1684h + 0100h + 1 to be sure
+slrnk /a:1785,/p:0100,unzip184,unzip184/n/e

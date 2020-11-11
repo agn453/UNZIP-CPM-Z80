@@ -8,29 +8,33 @@ Revisn	equ	4	;;v1.8-4
 ;
 ;
 ; Version 1.8-4 -- October 18, 2020 -- Russell Marks and Lars
-;	Made slight optimisations to bit-readers, and added 
-;	various comments.	
+;	Made slight optimisations to bit-readers, fixed long-filename 
+;	buffer overrun, added removal of directory path from filename
+;	and added various comments.	
 ;
-;	Use self-modifying code with an unrolled end loop in rdbybits,
-;	and add a "rd1bit" macro, for about a 12% speed improvement
+;	Used self-modifying code with an unrolled end loop in rdbybits,
+;	and added a "rd1bit" macro, for about a 12% speed improvement
 ;	on overall extraction time compared to version 1.5-3.
 
 ;	Improvement on overall extraction time of 38% total
 ;	compared to Version 1.8.
-;	Add some basic comments to code/data based mostly on the
+;	Added some basic comments to code/data based mostly on the
 ;	https://en.wikipedia.org/wiki/Zip_(file_format)
 ;	format description.
 ;
+; Version 1.8-3 -- October 15, 2020 -- Russell Marks
 ;	More optimisations to improve the speed of the UnDeflate
-;	method added.
+;	method.
 ;
 ;	Calls to readbits when an eight or fewer bit value is
 ;	passed optimised to a new rdbybits routine (about a 20%
 ;	speed improvement).
 ;	Cosmetic change the "V" label to "urV" for assembly with
 ;	zmac under Unix.
-;	Now use a table-based CRC algorithm.  This increases
-;	code size by about 1Kbyte and boosts speed.
+;	Output a message when there is insufficient TPA available.
+;	Use a table-based CRC algorithm.  This increases
+;	code size by about 1Kbyte and boosts the speed by more
+;	than 30% compared to version 1.5-2.
 ;
 ; Version 1.8-2 -- September 3, 2020 -- Martin and Lars
 ;	Major & minor Improvments plus bug fixes.
@@ -118,12 +122,45 @@ Revisn	equ	4	;;v1.8-4
 ;	responds to "//".  This program still needs a lot of work.
 ;	It's probably not bullet-proof and testing has been very
 ;	limited, but it seems to work.
-;
+ 
 ; Version 1.2 -- July 3, 1990 -- David P. Goodenough
+;
+; Production:
+;   To use to Microsoft compatible libraries SYSLIB, ZSLIB and Z3LIB,
+; move these libraries to the default directory and set the conditional
+; assembly equate 'SLRlibs' below false.
+;   Assemble with ZMAC, Z80ASM or M80:
+;	ZMAC UNZIP184, Z80ASM UNZIP184/M or M80 =UNZIP184
+;   Link with ZML 
+;	zml unzip184
+;   To use SLR compatible libraries SYSLIBS, ZSLIBS and Z3LIBS, copy
+; these libraries to the default directory, make sure UNZIP184.SLR is
+; also in the default directory and set the conditional assembly 
+; equate 'SLRlibs' below true. Then assemble with Z80ASM
+;	Z80ASM UNZIP184/R
+; and link with SLRNK+
+;	SLRNK+ UNZIP184.SRL/I
+;
+;   Note you don't want to link with LINK because it initializes 
+; unitializes data to zeroes and thus produces a 48k COM file.  Likewise
+; you can't link with L80 or SLRNK because they run out of memory.  For
+; some unknown reason, SLRNK+ doesn't include unitialized data in the
+; COM file - go figure.  The file UNZIP184.SLR contains the linker
+; commands.  My version of SLRNK+ will not process commands placed on
+; the command line and hence the need for UNZIP184.SLR.
 ;
 FALSE	equ	0
 TRUE	equ	not FALSE
-debug	equ	FALSE
+;
+; conditional assembly equates
+debug	equ	TRUE		; set true to reduce required TPA
+				; so that there is room to run a
+				; debugger
+SLRlibs	equ	false		; set true if using with SLR compatible 
+;				; libraries and false if Microsoft
+				; compatible libraries
+				; ***** leave false for now *****
+
 ; User equates
 ;
 	 if	DEBUG
@@ -180,16 +217,26 @@ CR	equ	0Dh
 LF	equ	0Ah
 CtrlZ	equ	1Ah
 ;
+	 if SLRlibs
+	.request zslibs
+	ext	fxropen,fxwopen,fxrclose,fxwclose,fxget,fxput
+;
+	.request z3libs
+	ext	z3log
+;
+	.request syslibs
+	ext	f$close,f$delete,initfcb
+	 else
+;
 	.request zslib
-;	ext	fxropen,fxwopen,fxrclose,fxwclose,fxget,fxput
 	ext	fxrope, fxwope, fxrclo,  fxwclo,  fxget,fxput
 ;
 	.request z3lib
 	ext	z3log
 ;
 	.request syslib
-;	ext	f$close,f$delete,initfcb
 	ext	f$clos, f$dele,  initfc
+	 endif
 ;
 	public	$memry
 ;
@@ -204,7 +251,7 @@ start:
 	call	ilprt
 	db	'UNZIP Version '
 	db	Vers/10+'0','.',Vers mod 10+'0'
-	db	'-',Revisn mod 10+'0'	;;v1.8-2
+	db	'-',Revisn mod 10+'0'	;;v1.8-1
 	db	' -  DPG',CR,LF,0
 	ld	a,(dfcb+1)	; filename?
 	cp	' '
@@ -284,8 +331,11 @@ wasext:	ld	de,dfcb
 	ld	de,infcb+1
 	ldir			; move filename to working fcb
 	ld	de,icb
-;	call	fxropen		; try to open zipfile
+	 if SLRlibs
+	call	fxropen		; try to open zipfile
+	 else
 	call	fxrope		; try to open zipfile
+	 endif
 	jr	nz,openok	; ok
 	call	ilprt		; complain and go to exit
 	db	'Couldn''t find ZIP file',CR,LF,0
@@ -352,8 +402,11 @@ nolfhs:	dec	l		; check for 05,06 (end of central dir.)
 	call	pecd
 ; close input file and exit program
 clsxit:	ld	de,icb
-;	call	fxrclose
-	call	fxrclo
+	 if SLRlibs
+	call	fxrclose
+	 else
+;	call	fxrclo
+	 endif
 	jr	exit
 ;
 ; (The belated-CRC type (07,08) is apparently not supported.)
@@ -421,23 +474,60 @@ plfh:	ld	de,lfh
 ;	ld	(hl),b
 ;	ldir
 ;
-; Read filename from LFH into "junk". Filenames of >255 (sic)
-; characters will be skipped after the 255th char.
-; Required as the format allows 65535-char filenames. (!)
+; Read filename from LFH into "junk". Note: ZIP file spec
+; allows 65535-char filenames!  There is a very small chance that
+; a complete filename including directory path could exceed 256
+; bytes. The directory path is meaningless to CP/M and needs to
+; striped off.  After this there still remains the problem that
+; the filename itself may be greater than 8 chars.  Here only 
+; the first 8 chars are used and the rest discarded.  There may
+; be better solutions.  The 3 chars after a '.' are taken as
+; the extension.
 ;
-	ld	de,junk
-	ld	hl,(fnl)
+	ld	de,junk		; put filename here
+	ld	hl,(fnl)	; filename length
+; read a byte at a time, reseting DE everytime a path seperator
+; is encountered until all bytes in the filename have been read.
+; '/', '\' and ':' are considered path seperators.  Assumes 
+; filename without path does not exceed 255 chars.
+rfnlp:
+	ld	a,h
+	or	l
+	jr	z,rdfndon
 	push	de
-	call	getstring
-	ld	de,junk + 20
-	ld	hl,(efl)
-	call	getstring
-	ld	de,opfcb
-;	call	initfcb
-	call	initfc
-	ex	de,hl
-	inc	hl
+	push	hl
+	call	getbyte
+	pop	hl
 	pop	de
+; check for path seperators
+	cp	'/'
+	jr	z,gotsep
+	cp	'\'
+	jr	z,gotsep
+	cp	':'
+	jr	nz,nosep
+gotsep:	ld	de,junk		;reset save pointer
+	jr	nosav		;don't save seperator
+nosep:	ld	(de),a
+	inc	de
+nosav:	dec	hl
+	jr	rfnlp
+rdfndon:
+	ld	(de),a		; save null terminator
+	ld	hl,(efl)
+	call	skpstring	; skip extra field
+
+; Path removed, now copy filename to FCB.
+;
+	ld	de,opfcb
+	 if SLRlibs
+	call	initfcb
+	 else
+	call	initfc		;clear fcb except filename
+	 endif
+	ex	de,hl
+	inc	hl		;point to filename
+	ld	de,junk
 	ld	b,8
 	call	scanfn
 	ld	a,(de)
@@ -504,8 +594,11 @@ extrct:	xor	a
 	jr	pjunk		; skip file
 ;
 creok:	ld	de,ocb		; create output file
-;	call	fxwopen
+	 if SLRlibs
+	call	fxwopen
+	 else
 	call	fxwope
+	 endif
 	jr	nz,opnok1
 	call	ilprt
 	db	'Error creating ',0
@@ -543,23 +636,23 @@ case0x:	ld	a,(nodest)
 	or	a
 	call	z,wildck
 case0w:	ld	a,(zipeof)	; get eof flag
-	and	1		; is it odd ie eof
+	and	1		; oef if odd
 	jr	nz,closeo
 savcs0:	call	getbyte
 	call	outbyte
 	jr	case0w
-; is file shrunk
+; is this file shrunk?
 case1:	dec	a
 	jr	nz,case2p
 	call	unshrink
 	jr	closeo
-; is file reduced
+; is this file reduced?
 case2p:	dec	a
 	cp	4
 	jr	nc,tryimp
 	call	unreduce
 	jr	closeo
-; is file imploded
+; is this file imploded?
 tryimp:	jr	nz,trydfl
 	call	unimplode
 	jr	closeo
@@ -572,26 +665,28 @@ trydfl:	cp	6
 badzip:	call	ilprt
 	db	'Unknown compression method',CR,LF,0
 badskp:	ld	a,(zipeof)	; get eof flag
-	and	1		; is it odd
+	and	1		; eof?
 	jr	nz,closeo
 	call	getbyte
 	jr	badskp
 	ret
 ;
 closeo:	ld	hl,zipeof	; point to eof flag
-	dec	(hl)		; decrement it
+	dec	(hl)		; clear it
 	inc	hl		; point to counting
 	dec	(hl)		; decrement it
 	ld	a,(curmode)	; check mode for this file
 	or	a
 	jr	nz,close1	; close output file if extracting
-;	jr	z,nocls
 	call	ilprt		; move on to next file
 	db	cr,lf,0
 	ret
 close1:	ld	de,ocb
-;	call	fxwclose
+	 if SLRlibs
+	call	fxwclose
+	 else
 	call	fxwclo
+	 endif
 	jp	z,wrterr
 	xor	a
 	ld	(opnflg),a
@@ -632,7 +727,7 @@ getchla:
 	call	getcode
 	ld	(code),hl
 	ld	a,(zipeof)	; get eof flag
-	and	1		; test for odd
+	and	1		; eof?
 	ret
 ;
 savstk:	ld	hl,(stackp)
@@ -761,7 +856,10 @@ pstr:	ld	a,(hl)
 	inc	hl
 	jr	pstr
 ;
-; getstring must return DE pointing just past the last byte read.
+; getstring - Read a string of bytes from input file
+;   Enter:	DE=location to start storing string
+;		HL=# of bytes get
+;   Exit:	DE pointing just past the last byte stored
 ;
 getstring:
 	ld	a,h
@@ -778,6 +876,9 @@ getstring:
 	dec	hl
 	jr	getstring
 ;
+; skpstring - read but do not save a string of bytes from 
+;		the input file, ie skip over them
+;   Enter:	HL=# of bytes to skip over
 skpstring:
 	ld	a,h
 	or	l
@@ -797,12 +898,16 @@ getword:
 	ld	h,a
 	ret
 ;
+; getbyte - read a byte from input file.
+;   Exit:	A=byte read or CtrlZ if eof
+;		Z set if successful, NZ is eof
+;		zipeof set if eof encountered
 getbyte:
 	ld	a,(counting)
 	or	a
 	jr	nz,dodci
 	ld	a,(zipeof)	; get eof flag
-	and	1		; test if odd ie set
+	and	1		; test if eof
 	ld	a,CtrlZ
 	ret	nz		; at eof so return CtrlZ
 	jr	skpdci
@@ -810,7 +915,7 @@ dodci:
 	ld	hl,(cs)		; get compressed file size
 	ld	de,(cs + 2)
 	ld	a,d
-	or	e		; test if zero length file
+	or	e		; test if file length zero
 	or	h
 	or	l
 	jr	nz,noteof	; jmp if length not 0
@@ -857,7 +962,7 @@ nopos:	pop	af
 outbyte:
 	push	af
 	call	updcrc
-nocrc:	ld	hl,(ucs)	; decrement uncompressed file size
+	ld	hl,(ucs)	; decrement uncompressed file size
 	ld	de,(ucs + 2)
 	ld	a,h
 	or	l
@@ -2215,7 +2320,7 @@ udubt:	call	ilprt
 	jr	udbskp
 ;
 ; ckcon -- checks console for character; aborts if ^C
-; Only really checks every 128 calls, it is called
+; Only really checks every conckct calls, it is called
 ; from getbyte for every input byte.
 ;
 ckcon:	ld	hl,conckct
@@ -2235,14 +2340,17 @@ ckcon:	ld	hl,conckct
 	jr	z,ckcon1	; (no)
 ckcon0:	call	setout
 	ld	de,opfcb
-;	call	f$close		; close it
-;	call	f$delete	; and delete it
+	 if SLRlibs
+	call	f$close		; close it
+	call	f$delete	; and delete it
+	 else
 	call	f$clos		; close it
 	call	f$dele		; and delete it
+	 endif
 	call	ilprt
-	db	'Partial file erased -- ',0
+	db	'Partial file erased --',0
 ckcon1:	call	ilprt
-	db	'Aborted',0
+	db	' Aborted',0
 	jp	clsxit
 ;
 ; getusr -- stuffs current user into default FCBs if not ZCPR3 (for Z3LOG)
@@ -2552,7 +2660,6 @@ bitbuf:	ds	1
 vars:
 bleft:	ds	1
 nodest:	ds	1
-;wrtpt:	ds	1
 outpos:	ds	4
 crc32:	ds	4
 curmode:
