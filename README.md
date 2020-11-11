@@ -41,6 +41,9 @@ so fetch a new copy if you've an older version.
 Lars is working on code to preserve the .ZIP file dates under CP/M Plus
 and handling long file names.
 
+Also a later Z-System version of ZIPDIR has been added.  Download from
+[ZIPDIR14](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir14.lbr)
+
 
 ### November 4, 2020
 
