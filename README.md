@@ -4,14 +4,14 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  Further speed optimisations.
 
-The latest release is V1.5-4 (CP/M) or V1.8-4 (Z-system) and may be
+The latest release is V1.5-4 (CP/M) or V1.8-5 (Z-system) and may be
 downloaded in CP/M library file format from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
 
 or
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip184.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip185.lbr
 
 Support has been added for the Deflate algorithm (since V1.5-2 and V1.8-2)
 so that decompression of archives created with MS-DOS PKzip 2.04g
@@ -28,6 +28,27 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### November 18, 2020
+
+Lars Nelson has incorporated file datestamping to set each extracted
+file's date on CP/M formatted disks with Time-Stamps enabled.  This should work
+with DateStamper, ZSDOS, CP/M Plus (and ZPM3) and MP/M.
+
+The Z-System aware version number has been bumped to V1.8-5.
+
+There's one remaining issue involving the calculation of a cyclic redundancy
+check (CRC) value for files that are not being extracted (i.e. listing contents
+of a .ZIP file).  In the older V1.5-2 (and later revisions) Martin removed
+the CRC calculation when listing a .ZIP file's contents.
+Lars has tried to restore this code in V1.8-5 but it is calculating the
+wrong value for files not being extracted.  As a work-around, these skipped
+files are now being treated as "Stored" files for now.
+
+You can grab this latest version in a CP/M format library file from -
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip185.lbr
+
+
 ### November 11, 2020
 
 Lars Nelson has fixed an UnDeflate issue as well as added code to strip
@@ -37,9 +58,6 @@ or SLR184.SUB (using SLR Z80ASM and SLRNK).
 
 Once again, I've updated the source and library file (still at v1.8-4)
 so fetch a new copy if you've an older version.
-
-Lars is working on code to preserve the .ZIP file dates under CP/M Plus
-and handling long file names.
 
 Also a later Z-System version of ZIPDIR has been added.  Download from
 [ZIPDIR14](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir14.lbr)
