@@ -1,0 +1,116 @@
+;
+	public	IPuser,OPuser
+	public	mode,junk,lfh,gpbf,cm,lmft
+	public	lmfd,crc,cs,ucs,fnl,efl
+	public	endlfh,lfhsiz,opfcb,opfn,opext,bitbuf,vars
+	public	bleft,wrtpt,outpos,crc32,curmode,opbuf
+	public	L_table,D_shift,V,nchar,lchar,ExState
+	public	Len,ltp,mml,dictb,noswps,entrs
+	public	lbl,treep,lenp,nodes,nrsym,nnode,bcode,bmask
+	public	blcnt,ncode,hlit,hdist,inbps,rdpts
+	public	lenld,cltr,littr,disttr,bitbs,blfts
+	public	oldcode,offset,codesize,maxcode,free_ent
+	public	finchar,stackp,incode,code,outbuf,suffix_of
+	public	prefix_of,Slen,lit_tree,len_tree,dist_tre,followers,stack
+	public	fcb2sav,eodata,locstk,nomtch
+	
+	ASEG
+	
+; Unitialised data for UNZIPZ
+
+	maclib	unzipequ.lib	; Equates
+
+;lfhsiz	equ	(endlfh-lfh)	; This equate added to facilitate assembly
+
+	DSEG
+
+IPuser	equ	$		; User number for input file
+OPuser	equ	IPuser+1	; User number for output file
+fcb2sav	equ	OPuser+1	; Buffer to hold copy of filename in FCB2
+mode	equ	fcb2sav+11	; 0 if extracting, NZ if checking
+nomtch	equ	mode+1		; 'no match' FLAG, 0 if match, NZ if no match
+junk	equ	nomtch+1	; General buffer
+
+lfh	equ	junk+STRSIZ	; 2 bytes
+gpbf	equ	lfh+2		; 2 bytes
+cm	equ	lfh+4		; Compression type.	0=Stored
+				;			1=Shrunk
+				;		      2-5=Reduced
+				;			6=Implode
+				;			7=Token
+				;			8=Deflate
+lmft	equ	lfh+6
+lmfd	equ	lfh+8
+crc	equ	lfh+10		; 32 bit CRC (four bytes)
+cs	equ	lfh+14		; Length of file as stored        (32 bit)
+ucs	equ	lfh+18		; Length of file after extraction (32 bit)
+fnl	equ	lfh+22		; Length of the filename
+efl	equ	lfh+24		; Length of other stuff
+endlfh	equ	lfh+26
+lfhsiz	equ	(endlfh-lfh)	; This equate added to facilitate assembly
+
+opfcb	equ	lfh+27		; Output FCB
+opfn	equ	lfh+28		; Output filename
+opext	equ	lfh+36		; Output type
+
+bitbuf	equ	opext+3+4+16+1
+vars	equ	bitbuf+1
+bleft	equ	vars
+wrtpt	equ	vars+1
+outpos	equ	wrtpt+1
+crc32	equ	outpos+4
+curmode	equ	crc32+4
+opbuf	equ	curmode+1
+L_table	equ	opbuf+128
+D_shift	equ	L_table+1
+
+V	equ	D_shift+1
+nchar	equ	V+1
+lchar	equ	nchar+1
+ExState	equ	lchar+1
+Len	equ	ExState+1
+ltp	equ	Len+2
+mml	equ	ltp+1
+dictb	equ	mml+1
+noswps	equ	dictb+1
+entrs	equ	noswps+1
+lbl	equ	entrs+2		;ds 1
+treep	equ	lbl+1		;ds 2
+lenp	equ	treep+2		;ds 2
+nodes	equ	lenp+2		;ds 2
+nrsym	equ	nodes+2		;ds 2
+nnode	equ	nrsym+2		;ds 2
+bcode	equ	nnode+2		;ds 2
+bmask	equ	bcode+2		;ds 2
+blcnt:	equ	bmask+2		;ds 2 * maxcl + 2
+ncode:	equ	blcnt+(2*maxcl+2) ;ds 2 * maxcl + 2
+hlit:	equ	ncode+(2*maxcl+2) ;ds 2
+hdist:	equ	hlit+2		;ds 1
+inbps:	equ	hdist+1		;ds 2
+rdpts:	equ	inbps+2		;ds 1
+bitbs:	equ	rdpts+1		;ds 1
+blfts:	equ	bitbs+1		;ds 1
+lenld:	equ	blfts+1		;ds (nrlit+nrdist)
+cltr:	equ	lenld+(nrlit+nrdist) ;ds (4*nrcl)
+littr:	equ	cltr+(4*nrcl)	;ds (4*nrlit)
+disttr:	equ	littr+(4*nrlit) ;ds (4*nrdist)
+oldcode	equ	disttr+(4*nrdist)
+offset	equ	oldcode+2
+codesize equ	offset+2
+maxcode	equ	codesize+1
+free_ent equ	maxcode+2
+finchar	equ	free_ent+2
+stackp	equ	finchar+1
+incode	equ	stackp+2
+code	equ	incode+2
+outbuf	equ	code+2
+suffix_of equ	outbuf
+prefix_of equ	outbuf+8192
+Slen	equ	prefix_of
+lit_tree equ	prefix_of
+len_tree equ	lit_tree + _sf_tree_
+dist_tre equ	len_tree + _sf_tree_
+followers equ	dist_tre + _sf_tree_ + 16384 + 2 - [3 * _sf_tree_]
+stack	equ	followers
+locstk	equ	stack + 8192 + 60
+eodata	equ	locstk

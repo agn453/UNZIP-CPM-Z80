@@ -1,0 +1,37 @@
+
+		
+STRSIZ	equ	256
+EXTRACT	equ	'E'
+; BDOS Functions
+BDOS	equ	5
+OPEN	equ	0fh
+close	equ	10h
+read	equ	14h
+write	equ	15h
+create	equ	16h
+fstdma	equ	01ah
+;
+infcb	equ	05ch
+fcb2	equ	06ch
+DLE	equ	144
+max_bits equ	13
+init_bits equ	9
+hsize	equ	8192
+first_ent equ	257
+clear	equ	256
+maxcmax	equ	1 SHL max_bits
+CR	equ	13
+LF	equ	10
+CtrlZ	equ	1Ah
+maxSF	equ	256
+_code	equ	0
+_value	equ	2
+_bitlength equ	3
+_entries equ	0
+_maxlength equ	2
+_entry	equ	4
+_sf_tree_ equ	4 + 4 * maxSF
+maxcl	equ	16
+nrcl	equ	19
+nrlit	equ	288
+nrdist	equ	32
