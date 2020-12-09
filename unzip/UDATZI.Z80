@@ -14,11 +14,11 @@
 	public	prefix_of,Slen,lit_tree,len_tree,dist_tre,followers,stack
 	public	fcb2sav,eodata,locstk,nomtch
 	
-	ASEG
+	dseg
 	
 ; Unitialised data for UNZIPZ
 
-	maclib	unzipequ.lib	; Equates
+	maclib	UNZIPEQU.LIB	; Equates - M80 needs caps
 
 ;lfhsiz	equ	(endlfh-lfh)	; This equate added to facilitate assembly
 
@@ -82,18 +82,18 @@ nrsym	equ	nodes+2		;ds 2
 nnode	equ	nrsym+2		;ds 2
 bcode	equ	nnode+2		;ds 2
 bmask	equ	bcode+2		;ds 2
-blcnt:	equ	bmask+2		;ds 2 * maxcl + 2
-ncode:	equ	blcnt+(2*maxcl+2) ;ds 2 * maxcl + 2
-hlit:	equ	ncode+(2*maxcl+2) ;ds 2
-hdist:	equ	hlit+2		;ds 1
-inbps:	equ	hdist+1		;ds 2
-rdpts:	equ	inbps+2		;ds 1
-bitbs:	equ	rdpts+1		;ds 1
-blfts:	equ	bitbs+1		;ds 1
-lenld:	equ	blfts+1		;ds (nrlit+nrdist)
-cltr:	equ	lenld+(nrlit+nrdist) ;ds (4*nrcl)
-littr:	equ	cltr+(4*nrcl)	;ds (4*nrlit)
-disttr:	equ	littr+(4*nrlit) ;ds (4*nrdist)
+blcnt	equ	bmask+2		;ds 2 * maxcl + 2
+ncode	equ	blcnt+(2*maxcl+2) ;ds 2 * maxcl + 2
+hlit	equ	ncode+(2*maxcl+2) ;ds 2
+hdist	equ	hlit+2		;ds 1
+inbps	equ	hdist+1		;ds 2
+rdpts	equ	inbps+2		;ds 1
+bitbs	equ	rdpts+1		;ds 1
+blfts	equ	bitbs+1		;ds 1
+lenld	equ	blfts+1		;ds (nrlit+nrdist)
+cltr	equ	lenld+(nrlit+nrdist) ;ds (4*nrcl)
+littr	equ	cltr+(4*nrcl)	;ds (4*nrlit)
+disttr	equ	littr+(4*nrlit) ;ds (4*nrdist)
 oldcode	equ	disttr+(4*nrdist)
 offset	equ	oldcode+2
 codesize equ	offset+2
@@ -110,7 +110,8 @@ Slen	equ	prefix_of
 lit_tree equ	prefix_of
 len_tree equ	lit_tree + _sf_tree_
 dist_tre equ	len_tree + _sf_tree_
-followers equ	dist_tre + _sf_tree_ + 16384 + 2 - [3 * _sf_tree_]
+followers equ	dist_tre + _sf_tree_ + 16384 + 2 - (3 * _sf_tree_)
 stack	equ	followers
 locstk	equ	stack + 8192 + 60
 eodata	equ	locstk
+	end

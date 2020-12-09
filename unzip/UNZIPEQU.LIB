@@ -1,5 +1,4 @@
-
-		
+; UNZIPZ Equates		
 STRSIZ	equ	256
 EXTRACT	equ	'E'
 ; BDOS Functions
@@ -35,3 +34,6 @@ maxcl	equ	16
 nrcl	equ	19
 nrlit	equ	288
 nrdist	equ	32
+
+
+

@@ -4,19 +4,19 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  Further speed optimisations.
 
-The latest release is V1.5-4 (CP/M) or V1.8-5 (Z-system) and may be
+The latest release is V1.5-4 (CP/M) or V1.8-6 (Z-system) and may be
 downloaded in CP/M library file format from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip154.lbr
 
 or
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip185.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip186.lbr
 
-Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.3-2
+Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.4-1
 and is available from -
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz03.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz04.lbr
 
 Support has been added for the Deflate algorithm (since V1.5-2 and V1.8-2)
 so that decompression of archives created with MS-DOS PKzip 2.04g
@@ -32,6 +32,25 @@ MS-DOS Version 1.x.)
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### December 9, 2020
+
+Lars Nelson has been busy!  He's updated Simeon Cran's UNZIPZ to include
+the optimised bit manipulation and the table-based CRC routines by Russell
+Marks to give a significant speed improvement (estimated 45% faster than
+the UNZIPZ V0.3-4 version).  This latest version is designated V0.4-1
+and can be downloaded from
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz04.lbr
+
+Also, Lars has updated the Z-system version to produce a .ZIP file
+contents listing in a format that includes compressed/uncompressed
+file size, compression method, modification time-stamp and the 32-bit CRC.
+
+This version V1.8-6 can be downloaded from
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip186.lbr
+
 
 ### November 30, 2020
 
