@@ -33,6 +33,14 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### December 23, 2020
+
+Some testing has revealed a problem UnDeflating small text files with the
+Z-System version V1.8-6.  Lars has debugged and corrected this issue.
+The V1.8-6 version files (and the library containing them) have been updated.
+UNZIPZ V0.4-1 and the V1.5-4 version are not affected.
+
+
 ### December 9, 2020
 
 Lars Nelson has been busy!  He's updated Simeon Cran's UNZIPZ to include

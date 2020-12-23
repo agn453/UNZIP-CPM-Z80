@@ -303,31 +303,31 @@ wasfil:	ld	hl,0
 ;
 	ld	hl,($memry)	; top of dseg
 	ld	(opbuf),hl	; store as output buffer address
-	 if	debug
-	ld	de,80h		; size of output buffer
-	ld	a,1		; # of records
-	 else
+;;	 if	debug
+;;	ld	de,80h		; size of output buffer
+;;	ld	a,1		; # of records
+;;	 else
 	ld	de,obfsiz shl 8	; output buffer size (pages)
 	ld	a,d
 	add	a,a		; convert to records
-	 endif
+;;	 endif
 	ld	(ocb),a		; and store in output control block
 	add	hl,de		; determine address of input buffer
 	ld	(ipbuf),hl
-	 if	debug
-	add	hl,de
-	 endif
+;;	 if	debug
+;;	add	hl,de
+;;	 endif
 	ex	de,hl		; get buffer address in de
-	 if	not debug
-	inc	d		; assume 1 page for input buffer
-	 endif
+;;	 if	not debug
+;;	inc	d		; assume 1 page for input buffer
+;;	 endif
 	ld	hl,(bdos+1)	; top of memory
 	xor	a		; clear accumulator and carry
 	sbc	hl,de		; hl = memory available less 1 page
 	jp	c,nomem
-	 if	debug
-	ld	a,1
-	 else
+;;	 if	debug
+;;	ld	a,1
+;;	 else
 	inc	h		; now = total memory available
 	rl	l		; shift possible extra record to carry
 	adc	a,h
@@ -336,7 +336,7 @@ wasfil:	ld	hl,0
 	cp	b		; compare computed to optimum value
 	jr	c,sticb		; computed value smaller, use it
 	ld	a,b		; else use optimum
-	 endif
+;;	 endif
 sticb:	ld	(icb),a		; store in input control block
 ;
 	ld	a,(altfcb)
@@ -434,15 +434,18 @@ sigerr:	call	ilprt
 ;
 ; should be pointing at beginning of either a Local file
 ; header or a Central Directory Structure
-; 1st and 2nd bytes should be 'KP'
+; 1st and 2nd bytes should be 'KP' (Phil Katz's initials little endian)
 ; 3rd and 4th bytes should be either 0403h or 0201h
 ; where 403h => local header and 201 => Central Directory
 ; Structure which is at the end of the input file. 
-; 605h=>extend central dir.  Note only interested in local 
+; 605h=>end central dir.  Note only interested in local 
 ; header which preceeds each compressed file.
 ; Check for valid header signature.
-openok:	call	getword
-	ld	de,-(('K' shl 8) + 'P')
+openok:
+	ld	hl,0
+	ld	(zipeof),hl		; clear zipeof and counting
+	call	getword
+	ld	de,-(('K' shl 8) + 'P')	; Phil Katz's initials!
 	add	hl,de
 	ld	a,h
 	or	l		; hl=0 =>valid signature?
@@ -575,7 +578,10 @@ rfnlp:
 	jr	nz,nosep
 gotsep:	ld	de,junk		;reset save pointer
 	jr	nosav		;don't save seperator
-nosep:	ld	(de),a
+nosep:	cp	'a'
+	jr	c,nolc
+	and	5fh		;capitalize
+nolc:	ld	(de),a		;save char in junk
 	inc	de
 nosav:	dec	hl
 	jr	rfnlp
@@ -711,7 +717,7 @@ case0x:
 ; print version, date and time
 	call	opver
 ; copy stored file to output
-case0w:	ld	a,(zipeof)	; get eof flag
+case0w:	ld	a,(zipeof)	; check eof flag
 	and	1		; oef if odd
 	jp	nz,closeo
 	call	getbyte
@@ -741,7 +747,7 @@ trydfl:	cp	6
 badzip:	call	ilprt
 	db	'Unknown compression method -- Skipping',CR,LF,0
 skipit:	xor	a
-	ld	(curmode),a
+	ld	(curmode),a	; set to no extract
 	inc	a
 	ld	(counting),a	; make sure getbyte counts bytes
 badskp:	ld	a,(zipeof)	; get eof flag
@@ -1059,8 +1065,16 @@ noteof:	ld	a,h		; decrement 32 bit compressed file size
 skpdci:	call	ckcon		; check console for abort
 	ld	de,icb
 	call	fxget		; get a byte from zip file
+getadr	equ	$-2		; addr of input routine
 	ret	nz		; return if read successful
 	ld	a,CtrlZ		; read error - return Ctrl-Z
+	ret
+;
+; read input from 'static_pre'
+rdstat:	ld	hl,(inbps)	; get pointer in table
+	ld	a,(hl)		; get byte from table
+	inc	hl		; point to next byte
+	ld	(inbps),hl	; save it
 	ret
 ;
 outb:	ld	hl,(outpos)
@@ -1160,8 +1174,8 @@ updcrc:	ld	bc,(crc32)
 	ret
 ;
 unshrink:
-	call	ilprt
 ; print method
+	call	ilprt
 	db	' Shrunk ',0
 ; print version, date and time
 	call	opver
@@ -2303,19 +2317,21 @@ hmcn3:	ld	a,b
 	ld	b,0
 	call	buildcode
 
-	ld	hl,(inbps)
+	ld	hl,(inbps)		; saved input buffer addr
 	ld	a,l
 	or	h
 	jr	z,hmnext
-	ld	(inbufp),hl
-	ld	a,(rdpts)
-	ld	(readpt),a
+; restore state input control block
+	ld	hl,fxget		; restore input routine addr
+	ld	(getadr),hl
+; restore bit pointers
 	ld	a,(blfts)
-	ld	(bleft),a
+	ld	(bleft),a		; restore bit pointer
 	ld	a,(bitbs)
-	ld	(bitbuf),a
+	ld	(bitbuf),a		; restore bit buffer addr
+;
 	ld	hl,counting
-	inc	(hl)
+	inc	(hl)			; resume counting bytes read
 
 hmnext:	ld	hl,littr
 	call	nextsymbol
@@ -2431,27 +2447,28 @@ udt0lp:	ld	a,b
 
 udnt0:	dec	a
 	jr	nz,udnt1
-	ld	hl,(inbufp)
-	ld	(inbps),hl
-	ld	a,(readpt)
-	ld	(rdpts),a
-	ld	a,(bleft)
+; switch input to read from static_pre table
+	ld	hl,rdstat		; addr of input routine
+	ld	(getadr),hl		; save it in call instrution
+	ld	hl,static_pre		; addr of next byte to read
+	ld	(inbps),hl		; save it
+; save bit pointers
+	ld	a,(bleft)		; save bit pointer
 	ld	(blfts),a
-	ld	a,(bitbuf)
+	ld	a,(bitbuf)		; save bit buffer addr
 	ld	(bitbs),a
-	ld	hl,counting
+;
+	ld	hl,counting		; stop counting bytes read
 	dec	(hl)
-	ld	hl,static_pre
-	ld	(inbufp),hl
-	xor	a
-	ld	(readpt),a
+;
+	xor	a			; reset bit read offset
 	ld	(bleft),a
 	call	huffman
 	jr	udnext
 
 udnt1:	dec	a
 	jr	nz,udubt
-	ld	hl,0
+	ld	hl,0			; clear input addr pointer 
 	ld	(inbps),hl
 	call	huffman
 
@@ -2503,9 +2520,9 @@ ckcon0:	call	setout
 	call	f$dele		; and delete it
 	 endif
 	call	ilprt
-	db	'Partial file erased --',0
+	db	'Partial file erased -- ',0
 ckcon1:	call	ilprt
-	db	' Aborted',0
+	db	'Aborted',0
 	jp	clsxit
 ;
 ; getusr -- stuffs current user into default FCBs if not ZCPR3 (for Z3LOG)
@@ -2696,13 +2713,13 @@ BCDLP:	INC	A		; Count up BCD..
 ;
 init:
 	db	0	; for bleft
-	db	1	; for wrtpt
+	db	0	; for wrtpt was 1
 	dw	0,0	; for outpos
 	dw	-1,-1	; for crc32
 endinit:
 dsbuf:	db	0,0,0,0,0
-inbufp:	dw	0080h
-readpt:	db	80h
+;inbufp:	dw	0080h	; points input buffer
+;readpt:	db	80h	; offset to next byte in input buffer
 omask:	db	1fh
 _L_table:
 	db	7fh, 3fh, 1fh, 0fh
@@ -2924,7 +2941,7 @@ counting:			; must follow zipeof - don't move
 	ds	1
 junk:	ds	STRSIZ
 lfh:				; data read from local file header
-vnte:	ds	2		; version
+vnte:	ds	2		; PKZIP version
 gpbf:	ds	2		; general purpose bit flag
 cm:	ds	2		; compression method
 lmft:	ds	2		; file last modification time
@@ -2940,8 +2957,8 @@ endlfh:	ds	1		; marker for end of lfh data; also,
 icb:	ds	1	;Number of 128-byte records in buffer (set by user)	
 	ds	2	;Drive and user (set and used by ZFXIO)
 	ds	1	;End of file flag (set and used by ZFXIO)
-	ds	2	;Byte counter (set and used by ZFXIO)
-	ds	2	;Pointer to next byte (set and used by ZFXIO)
+ipcnt:	ds	2	;Byte counter (set and used by ZFXIO)
+ipbp:	ds	2	;Pointer to next byte (set and used by ZFXIO)
 ipbuf:	ds	2	;Address of working buffer (set by user)
 infcb:	ds	36	; input file control block
 ; Output Control Block for byte oriented file read
@@ -2957,7 +2974,7 @@ mtchfcb:
 bitbuf:	ds	1
 vars:
 bleft:	ds	1
-nodest:	ds	1
+	ds	1
 outpos:	ds	4
 crc32:	ds	4
 curmode:
@@ -2993,7 +3010,8 @@ ncode:	ds	2 * maxcl + 2
 hlit:	ds	2
 hdist:	ds	1
 inbps:	ds	2
-rdpts:	ds	1
+;rdpts:	ds	2
+;incnt:	ds	2
 bitbs:	ds	1
 blfts:	ds	1
 oldcode:

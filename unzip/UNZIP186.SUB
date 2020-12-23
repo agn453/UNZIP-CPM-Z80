@@ -1,6 +1,6 @@
 zsm4 =unzip186.z80
 link unzip186
-; strip off DSEG storage (last CSEG address is 2206h)
+; strip off DSEG storage (last CSEG address is 2213h)
 sid unzip186.com
-<wunzip186.com,100,2206
+<wunzip186.com,100,2213
 <g0
