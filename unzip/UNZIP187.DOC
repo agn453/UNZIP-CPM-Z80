@@ -1,0 +1,214 @@
+
+                              UNZIP
+                           Version 1.8-7
+
+This version of UNZIP now can extract all files from MS-DOS ZIP files.  The 
+addition of the UnDeflate decompression method make this possible since 
+previous versions could not handle Deflated files.  Additionally it sets 
+the date stamp of the extracted file is the OS supports date stamping.
+
+Usage Syntax:
+
+         UNZIP {dir:}zipfile {dir:}{afn}
+
+Under ZCPR3 "dir" can be a DU or DIR spec; otherwise, just a drive.  If no 
+destination drive is given, member files are checked and listed that match 
+"AFN".  If a destination drive is given, member files are extracted that match 
+"afn" if given, otherwise all member files are extracted.  This follows the 
+syntax used by for example UNARC.
+
+You can abort UNZIP at any time with ^C (and the partial output file, if 
+any, will be closed and erased).  
+
+Help on useage is available by entering "//".  This program still needs a 
+lot of work.  It's probably not bullet-proof and testing has been very 
+limited, but it seems to work.
+
+For each file processed, UNZIP prints out all the file information 
+contained in the zip file. The following is an example.
+
+UNZIP  Version 1.8-7 - DPG
+Extracting
+ZIP archive  =
+Name         Length  Stored   Method   Ver  File Date & Time    CRC    STATUS
+============ ======= =======  ======== ===  =========  =====  ======== =======
+UDATZI  .Z80   3201    1320   Deflated  20  19 Oct 20  07:22  CC7E8454  CRC OK
+UNZIP   .Z80  18464    5419   Deflated  20  19 Oct 20  21:16  45E711B1  CRC OK
+UNZIP12 .Z80  17649    5042   Deflated  20  08 Jun 20  07:46  4C05E1AB  CRC OK
+
+
+Production:
+
+Either Microsoft compatible or SLR compatible libraries can be used.  Set 
+the conditional SLRLIBS to FALSE to use to Microsoft compatible libraries 
+SYSLIB, ZSLIB DSLIB and Z3LIB, move these libraries to the default 
+directory.
+   Assemble with ZMAC, Z80ASM or M80:
+     ZMAC UNZIP187, Z80ASM UNZIP187/M or M80 =UNZIP187
+   Link with ZML, SLRNK or LINK.  For ZML simply type
+     zml unzip187
+Linking with SLRNK or LINK is more complicated.  For SLRNK, first make a 
+trial link:
+     SRLNK /A:2000,UNZIP187/P:100,UNZIP187/N/E
+take the number in parens in the output, add 100h to it and replace the 
+2000 above with the result and make a final link.
+For LINK do the following
+     LINK UNZIP187
+Note the CODE SIZE displayed in screen output, add 100h to it and denote 
+result as N.  LINK includes unitialized data in the COM file producing a 48k 
+output.  To reduce COM file size, use the CP/M Plus version of SID as 
+follows:
+     SID UNZIP187.COM
+     WUNZIP187,100,N
+     G0
+Have been unable to get L80 to link.
+
+To use SLR compatible libraries SYSLIBS, ZSLIBS and Z3LIBS, copy these 
+libraries to the default directory and set the conditional assembly equate 
+'SLRlibs' true. Then assemble with Z80ASM
+     Z80ASM UNZIP187/R
+In this case, SLRNK is the only linking option.  Use the two step linking 
+process described above to produce a COM file.
+
+Revision History:
+
+Version 1.2 -- July 3, 1990 -- David P. Goodenough
+
+Version 1.3 -- Gene Pizzetta - May 12, 1991
+
+UNZIP dissolves MS-DOS ZIP files.  This version incorporates some quick and 
+dirty mods to make a more useful utility.  The original by David Goodenough 
+has to be the most God-awful source code I've ever come across.  It was 
+totally uncommented, and I have no idea what kind of strange assembler it 
+was written for.  This code now assembles with SLR's Z80ASM and it's a 
+little more orderly.
+
+You can now abort this thing with ^C (and the partial output file, if any, 
+will be closed and erased).  The usage screen now responds to "//".
+
+UNZIP still needs a lot of work.  It really ought to be possible to extract 
+member files selectively, but it's all or nothing at present.  In addition, 
+listing files should be a lot faster checking CRC's in that mode seems 
+unnecessary.  Typing a member file to the screen would also be a nice 
+enhancement.  I have only limited use for an UNZIP utility, so my purpose 
+here was to do just enough to make its operation acceptable.  Maybe 
+someone else will interested in going further.  In the meantime, Steve 
+Greenberg's ZIPDIR and Carson Wilson's ZTYPE can fill the gap.
+
+This version is probably not bullet-proof.  Testing has been very limited, 
+and frankly I don't understand much of the code, but so far it seems to work.
+
+     Gene Pizzetta
+     481 Revere St.
+     Revere, MA 02151
+
+     Voice:  (617) 284-0891
+     Newton Centre Z-Node:  (617) 965-7259
+     Ladera Z-Node Central:  (213) 670-9465
+
+Version 1.4 modifications by Bruce Morgen, 5/16/91
+
+In addition to fixing a bug in the ZCPR3 detection code at "setusr," Version 
+1.4 adds output filename specification with wildcards.  Now the use of an 
+output d:/dir: and/or an output filename will trigger extract mode.  If the 
+output filespec contains no wildcards (a d:/dir: alone is equivalent to 
+"*.*"), UNZIP will now exit after the first extraction (made sense to me, any 
+objections?).  And no, Gene, I am NOT "adopting" UNZIP -- I just tweaked 
+it far enough that it ceased to annoy me significantly in the very limited 
+use I have for it...
+
+Version 1.5 modifications by Howard Goldstein, 6/1/91
+
+This release contains no new features or options.  Its purpose is merely to 
+correct some serious bugs that were introduced in the previous version.  
+See the source file for details.
+
+Like Bruce and Gene, I have no intention of doing any further 
+develompment on this program.  I will, however, attempt to fix anything 
+that does not work as documented.
+
+Version 1.6 modifications by Howard Goldstein, 4/3/92
+
+OK, I lied.
+
+I began using UNZIP a bit more recently and found it to be much too slow. 
+I therefore took Gene's suggestion and changed the program so it no longer 
+expands a file and checks its CRC when that file is not being extracted.  I 
+also replaceed the disk read and write routines.  The old ones could handle 
+only 128 bytes at a time; the new ones, from ZSLIB, can handle much larger 
+buffers.  This increases speeed and decreases wear and tear on the drives.
+
+
+Version 1.7 modifications by Howard Goldstein, 4/8/92
+
+This version corrects a couple of bugs that were noticed shortly after 
+version 1.6 was released.  The program now works correctly on files 
+containing long ZIP comments.  A typo in the usage screen was also fixed.
+
+Version 1.8 modifications by Howard Goldstein, 4/16/92
+
+Another bug fix, (the last, I hope).  In version 1.6 I managed to break the 
+section of the program that expands "reduced" files.  Version 1.8 fixes it.
+
+Version 1.8-1 -- June 17, 2020 -- Martin
+
+As postied to USENET newsgroup comp.os.cpm, a flaws in both the un- 
+implode and un-shrink routines was found to be causing CRC errors or 
+program crashes were discovered.
+
+For un-implode, the algorithm is essentially a translation of the PKZ101 
+MS-DOS algorithm in C that has been hand optimized into Z80 assembly 
+language.  However, the readtree() function was incorrectly returning a 
+byte value in the A register, when the shift routine at label ui5 was 
+expecting a 16-bit value in HL.
+
+For unshrink, there is a race condition with handling the "KwKwK" case 
+that was omitted from the routine.
+
+Both updates are flagged with ;;v1.8-1 comments, and the version sign-on 
+message now includes the revision.
+
+Version 1.8-2 -- September 3, 2020 -- Martin and Lars
+
+Bug fixes and some major and minor enhancements.
+
+Now properly handles the extraction of zero-length files.  Will now skip to 
+the next file header if the compression method is unknown.  Fixed readbits 
+when a full word (16 bits) is read (in preparation for implementing the 
+unDeflate algorithm.  Fixed mis-ordering of variables.  Code makes the 
+assumption that "bitbuf" is the byte before "bleft".  Major enhancement is 
+the implementation the UnDeflate algorithm (based on the work by Keir 
+Fraser's HiTech-C code at 
+  https://github.com/keirf/Amiga-Stuff/blob/master/inflate/degzip_portable.c
+Had to reduce I/O Buffers to 2K each because available memory no longer 
+supports 8K buffers.
+
+Version 1.8-4 -- October 18, 2020 -- Russell Marks and Lars
+
+Made slight optimisations to bit-readers, and added various comments.
+
+Use self-modifying code with an unrolled end loop in rdbybits, and add a 
+"rd1bit" macro, for about a 12% speed improvement on overall extraction 
+time compared to version 1.5-3.  Improvement on overall extraction time of 
+38% total compared to Version 1.8.  Add some basic comments to code/data 
+based mostly on the https://en.wikipedia.org/wiki/Zip_(file_format)
+format description.  More optimisations to improve the speed of the 
+UnDeflate method added.  Calls to readbits when an eight or fewer bit 
+value is passed optimised to a new rdbybits routine (about a 20% speed 
+improvement).  Cosmetic change the "V" label to "urV" for assembly with 
+zmac under Unix.  Now use a table-based CRC algorithm.  This increases 
+code size by about 1Kbyte and boosts speed.
+
+Version 1.8-5 -- November 17, 2020 -- Lars Nelson
+
+Squashed a couple minor bugs and added application of stored date stamps to 
+extracted file in systems that support date stamping.
+
+Version 1.8-6 -- December 2, 2020 -- Lars Nelson
+
+changed the output format to be more like UNARC.  Now shows compressed 
+and uncompressed file size, PKZIP version #, Compression Method, 
+modification date and time and 32 bit CRC.
+
+Version 1.8-7 -- June 14, 2021 -- Lars Nelson
+
