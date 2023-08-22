@@ -390,10 +390,14 @@ plfh2:	call	getstring	; rets DE pointing past last char read
 ; there is the possibility of adding some kind of support for
 ; zips with embedded paths in filenames (which are very common).
 ; It may be worth skipping ahead to the last directory separator
-; if present, the question is which ones to support; obviously
-; "\" and "/" are the most common examples. But this also risks
-; breaking some CP/M filenames. Maybe only do it optionally?
-; Or have an override to disable path-checking?
+; if present. But this also risks breaking some CP/M filenames.
+; Maybe only do it optionally?
+; Or have an override to disable path-checking? Eg InfoZip's -j switch.
+;
+; NOTE: The ZipFile specification *specifies* that directory seperators
+; inside a ZIP file are '/' characters, *regardless* of what the host's
+; directory separators are. So, *only* '/' *must* be treated as directory
+; seperators when scanning a ZIP file.
 ;
 ; Anyway, for now it's just a basic copy of filename to FCB.
 ;
