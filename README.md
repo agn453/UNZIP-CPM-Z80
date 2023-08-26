@@ -4,10 +4,10 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  Further speed optimisations.
 
-The latest release is V1.5-5 (CP/M) or V1.8-7 (Z-system) and may be
+The latest release is V1.5-6 (CP/M) or V1.8-7 (Z-system) and may be
 downloaded in CP/M library file format from -
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip155.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip156.lbr
 
 or
 
@@ -32,6 +32,14 @@ MS-DOS Version 1.x.)
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### August 24. 2023
+
+The CP/M version has been modified by Jonathon Harston to junk (ignore)
+file paths (if present in the ZIP file).  The sign-on message is also now
+only output when run without command-line parameters.  I've also bumped
+the version to V1.5-6.
+
 
 ### September 19, 2021
 
