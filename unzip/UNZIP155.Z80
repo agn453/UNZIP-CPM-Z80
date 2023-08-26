@@ -2,8 +2,15 @@
 ;
 ;	Dissolves MS-DOS ZIP files.
 ;
+; Can be assembled with ZMAC with:
+;	ZMAC -o UNZIP.COM UNZIP155.Z80
+;
 Vers	equ	15
-Revisn	equ	5		;;v1.5-5
+;Revisn	equ	5		;;v1.5-5
+Revisn	equ	6		;;v1.5-6
+;
+; August 2023 -- Jonathan Harston
+;	Junks file paths when extracting.
 ;
 ; Version 1.5-5 -- September 19, 2021 -- Tony Nicholson
 ;	CP/M filenames must be UPPERCASE
@@ -180,16 +187,17 @@ Z3EAdr:	dw	0
 ;
 start:	ld	(oldstk),sp	; save old stack here for future use
 	ld	sp,(6)		; set the stack pointer
-	call	ilprt
-	db	'UNZIP  Version '
-	db	Vers/10+'0','.',Vers mod 10+'0'
-	db	'-',Revisn mod 10+'0'	;;v1.5-1 identify revision
-	db	' - DPG',CR,LF,0
+; Should only display header as part of usage
+;	call	ilprt
+;	db	'UNZIP  Version '
+;	db	Vers/10+'0','.',Vers mod 10+'0'
+;	db	'-',Revisn mod 10+'0'	;;v1.5-1 identify revision
+;	db	' - DPG',CR,LF,0
 	ld	a,(infcb+1)	; filename?
 	cp	' '
-	jp	z,usage
+	jp	z,usage		; no filename - display usage
 	cp	'/'
-	jp	z,usage
+	jp	z,usage		; UNZIP /? - display usage
 ;
 ; Check TPA size (this will need adjusting if warm-boot-only exit
 ; is changed).
@@ -263,7 +271,9 @@ sigerr:	call	ilprt
 ; program might), and simply skipping past the central directory
 ; entirely. This leaves us potentially extracting deleted files,
 ; for example. It's probably not a real problem in most
-; cases, but it seemed worth noting.
+; cases, but it seemed worth noting. Many unzippers do actually
+; just work through the data segment and ignore the central
+; directory.
 ;
 openok:	call	getword
 	ld	de,-(('K' shl 8) + 'P')		; magic number
@@ -361,7 +371,7 @@ plfh:	ld	de,lfh
 	ld	de,opfcb+2
 	ld	bc,33
 	ld	(hl),b
-	ldir
+	ldir			; zero opfcb
 ;
 ; Read filename from LFH into "junk". Filenames of >255 (sic)
 ; characters will be skipped after the 255th char.
@@ -386,22 +396,44 @@ plfh2:	call	getstring	; rets DE pointing past last char read
 	ld	hl,(efl)
 	call	skpstring	; skip extra field
 ;
+; Copy leafname from junk to opfn.
+;
 ; Now that filenames of <=255 chars are retained to this point,
 ; there is the possibility of adding some kind of support for
 ; zips with embedded paths in filenames (which are very common).
-; It may be worth skipping ahead to the last directory separator
-; if present. But this also risks breaking some CP/M filenames.
-; Maybe only do it optionally?
-; Or have an override to disable path-checking? Eg InfoZip's -j switch.
+; We default to '-j' junk-paths and skip past any directories
+; to get to the final leafname. Does not make sense to have '-j'
+; turned off as CP/M does not have directories.
 ;
-; NOTE: The ZipFile specification *specifies* that directory seperators
-; inside a ZIP file are '/' characters, *regardless* of what the host's
-; directory separators are. So, *only* '/' *must* be treated as directory
-; seperators when scanning a ZIP file.
+; NOTE: The ZipFile specification specifies that directory seperators
+; inside a ZIP file are '/' characters, regardless of what the host's
+; directory separators are.
 ;
-; Anyway, for now it's just a basic copy of filename to FCB.
+; NOTE: ZipFiles may have directory entries, these are filenames that
+; end in '/'. For CP/M these should be skipped. This is implemented
+; by them being reduced to a null filename.
 ;
-	ld	de,junk
+	ld	hl,junk		; point to filename from ZipFile
+junk1:	ld	d,h		; current start of leafname
+	ld	e,l
+junk2:	ld	a,(hl)
+	inc	hl
+	and	a
+	jr	z,junked	; end of filename, hl=>leafname
+	cp	'/'		; Zipfile directory seperator
+	jr	z,junk1		; set this as start of leafname
+	jr	junk2		; otherwise check next char
+
+; de now points to the final leafname, or the end of the filename
+; if the entry is a directory.
+
+junked:	ld	a,(de)
+	and	a
+	ret	z		; Entry is a directory, ignore it
+; *NOTE* If a directory entry erroneously has a data field, will run
+; into it and get 'Bad Zip file' error.
+
+;	ld	de,junk
 	ld	hl,opfn
 	ld	b,8
 	call	scanfn
@@ -418,13 +450,14 @@ nodot:	ld	b,3
 	ld	a,(mode)
 resmod:	ld	(curmode),a
 	or	a
-	jr	z,extrct
+	jr	z,extrct	; zero = list without extracting
 mtched:	call	setout		; log output user
 	ld	de,opfcb	; see if output file already exists
 	ld	c,fopen
 	call	bdos
 	inc	a
 	jr	nz,exists
+; To do: Add Overwrite option (should be default)
 	ld	b,11
 	ld	hl,opfn
 	ld	de,mtchfcb
@@ -683,6 +716,7 @@ rd1bit	macro
 	ld	l,a
 	endm
 ;
+; scans up to B characters, padding if less, skipping any extras
 scanfn:	ld	a,(de)
 	cp	'.'
 	jr	z,nocopy
@@ -692,10 +726,12 @@ scanfn:	ld	a,(de)
 	dec	b
 	jp	m,scanfn
 	and	7fh		; remove high bit
-	cp	'a'		; convert to UPPERCASE
+	cp	60h		; convert to UPPERCASE
 	jr	c,scfu
-	cp	'z'+1
-	jr	nc,scfu
+;	cp	'a'		; convert to UPPERCASE
+;	jr	c,scfu
+;	cp	'z'+1
+;	jr	nc,scfu
 	sub	20h
 scfu:	ld	(hl),a
 	inc	hl
@@ -2283,8 +2319,12 @@ setbth:	ld	e,a
 ; usage -- show syntax for ZCPR3 ("dir:") or vanilla CP/M ("d:")
 ;
 usage:	call	ilprt
-	db	'Usage:',CR,LF
-	db	'   UNZIP {d',0
+	db	'UNZIP  Version '
+	db	Vers/10+'0','.',Vers mod 10+'0'
+	db	Revisn mod 10+'0'	;;v1.5-1 identify revision
+	db	' - DPG',CR,LF
+	db	'Usage: '
+	db	'UNZIP {d',0
 	ld	hl,(Z3EAdr)
 	ld	a,h
 	or	l
