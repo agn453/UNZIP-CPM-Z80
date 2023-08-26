@@ -394,10 +394,10 @@ plfh2:	call	getstring	; rets DE pointing past last char read
 ; Maybe only do it optionally?
 ; Or have an override to disable path-checking? Eg InfoZip's -j switch.
 ;
-; NOTE: The ZipFile specification *specifies* that directory seperators
+; NOTE: The ZipFile specification *specifies* that directory separators
 ; inside a ZIP file are '/' characters, *regardless* of what the host's
 ; directory separators are. So, *only* '/' *must* be treated as directory
-; seperators when scanning a ZIP file.
+; separators when scanning a ZIP file.
 ;
 ; Anyway, for now it's just a basic copy of filename to FCB.
 ;
