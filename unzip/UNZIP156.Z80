@@ -3,16 +3,28 @@
 ;	Dissolves MS-DOS ZIP files.
 ;
 ; Can be assembled with ZMAC with:
-;	ZMAC -o UNZIP.COM UNZIP155.Z80
+;	ZMAC -o UNZIP.COM UNZIP156.Z80
 ;
+FASTQUIT  equ	1	; Quit as soon as end of data section
+CCPQUIT   equ   1	; Returns to CCP instead of WARM
+
+
 Vers	equ	15
 Revisn	equ	6		;;v1.5-6
+VersDD	equ	27
+VersMM	equ	08
+VersYY	equ	2023
+
 ;
-; Version 1.5-6 -- August 2023 -- Jonathan Harston
+; Version 1.56 -- 27 August 2023 -- Jonathan Harston
 ;	Junks file paths when extracting.
+;	Returns to caller instead of jumping to WARM.
+;	Tidied up display. Added [Q]uiet and [O]verwrite.
+;	Syntax:	UNZIP {dir:}zipfile {dir:}{afn} [OQ]
+;	Updated code fairly untidy, next update to tidy up.
 ;
 ; Version 1.5-5 -- September 19, 2021 -- Tony Nicholson
-;	CP/M filenames must be UPPERCASE
+;	CP/M filenames must be UPPERCASE.
 ;
 ; Version 1.5-4 -- October 18, 2020 -- Russell Marks
 ;	Further slight optimisations to bit-readers,
@@ -85,7 +97,6 @@ Revisn	equ	6		;;v1.5-6
 ;
 ;	Both updates are flagged with ;;v1.5-1 comments, and the
 ;	version sign-on message now includes the revision.
-
 
 ; Version 1.5 -- june 1, 1991 -- Howard Goldstein
 ;	Fixed bug at WILDLP which was causing an output spec of "dir:"
@@ -185,12 +196,19 @@ CtrlZ	equ	1Ah
 Z3EAdr:	dw	0
 ;
 start:	ld	(oldstk),sp	; save old stack here for future use
+if CCPQUIT
+	ld	hl,(6)		; get top of memory
+	ld	de,0f800h	; allow space for CCP
+	add	hl,de
+	ld	sp,hl		; set the stack pointer
+else
 	ld	sp,(6)		; set the stack pointer
+endif
 	ld	a,(infcb+1)	; filename?
 	cp	' '
 	jp	z,usage		; no filename - display usage
 	cp	'/'
-	jp	z,usage		; UNZIP /? - display usage
+	jp	z,usage		; UNZIP /?  - display usage
 ;
 ; Check TPA size (this will need adjusting if warm-boot-only exit
 ; is changed).
@@ -200,9 +218,48 @@ start:	ld	(oldstk),sp	; save old stack here for future use
 	ld	de,endaddr
 	or	a
 	sbc	hl,de		; check endaddr is less (i.e. hl is >=)
-	jr	c,nomem
+	jp	c,nomem
 ;
-wasfil:	ld	de,altfcb
+	ld	hl,0080h	; command buffer
+	ld	l,(hl)		; get length
+	set	7,l		; point after end of line
+	inc	hl
+	ld	(hl),0		; put terminator in
+	ld	l,81h		; hl=>start of line
+optlp1:	ld	b,h		; b=0, options
+	ld	a,(hl)		; get character
+	inc	hl
+	cp	' '
+	jr	z,optlp1	; skip spaces
+	jr	c,optdone	; end of command line
+	cp	'['
+	jr	z,options	; start of options string
+optlp3:	ld	a,(hl)
+	inc	hl
+	cp	' '
+	jr	z,optlp1
+	jr	nc,optlp3	; skip filename
+	jr	optdone		; end of command line
+options:
+	ld	a,(hl)
+	inc	hl
+	cp	' '
+	jr	z,optlp1	; another filename
+	cp	'?'
+	jp	z,usage		; UNZIP [?] - display usage
+	and	05Fh		; upper case
+	jr	z,optdone	; end of command line
+	cp	']'
+	jr	nc,optdone	; end of options
+	or	b
+	ld	b,a
+	jr	options
+optdone:
+	ld	(opts-1),bc	; note options
+; bit 1 = [O]verwrite
+; bit 4 = [Q]uiet
+;
+	ld	de,altfcb
 	ld	a,(de)		; output drive given?
 	ld	(opfcb),a	; store it in output file control block
 	ld	(mode),a	; set the mode (non-zero = extract)
@@ -242,20 +299,26 @@ wasext:	call	setin		; log input user
 	call	bdos		; try and open ZIP file
 	inc	a
 	jr	nz,openok	; ok
-	call	ilprt
-	db	'Couldn''t find ZIP file',CR,LF,0
+	call	ilprt0
+	db	'Zipfile not found.',CR,LF,0
 	jr	exit
 ;
-nomem:	call	ilprt		; complain and fall through to exit
-	db	'Not enough memory!',CR,LF,0
+nomem:	call	ilprt0		; complain and fall through to exit
+	db	'Not enough memory.',CR,LF,0
 ;
 ; All exits point here for possible future enhancements, such
 ; as elimination of warm boot.
 ;
-exit:	jp	wboot
+exit:	
+if CCPQUIT
+	ld	sp,(oldstk)
+	ret
+else
+	jp	wboot
+endif
 ;
-sigerr:	call	ilprt
-	db	'Bad signature in ZIP file',CR,LF,0
+sigerr:	call	ilprt0
+	db	'Zipfile corrupt.',CR,LF,0
 	jr	exit
 ;
 ; Judging from https://en.wikipedia.org/wiki/Zip_(file_format)
@@ -280,8 +343,12 @@ openok:	call	getword
 	dec	h
 	dec	h
 	jr	nz,sigerr
+if FASTQUIT
+	jr	exit		; data block done, exit
+else
 	call	pcfh
 	jr	openok
+endif
 ;
 nocfhs:	dec	l		; check for 03,04 (local file header)
 	dec	l
@@ -298,8 +365,12 @@ nolfhs:	dec	l		; check for 05,06 (end of central dir.)
 	ld	a,h
 	sub	6
 	jr	nz,sigerr
+if FASTQUIT
+	jr	exit		; data block done, exit
+else
 	call	pecd
 	jr	exit
+endif
 ;
 ; (The belated-CRC type (07,08) is apparently not supported.)
 ;
@@ -312,6 +383,7 @@ nolfhs:	dec	l		; check for 05,06 (end of central dir.)
 ;
 ; pcfh - skip past central directory
 ;
+if FASTQUIT eq 0
 pcfh:	ld	b,12		; skip ahead to filename length entry
 pcfhl1:	push	bc
 	call	getword
@@ -339,9 +411,11 @@ pcfhl2:	push	bc
 	pop	hl
 	call	skpstring	; skip past file comment
 	ret
+endif
 ;
 ; pecd - skip past end-of-central-directory
 ;
+if FASTQUIT eq 0
 pecd:	ld	b,8		; skip ahead to comment length
 pecdl:	push	bc
 	call	getword
@@ -350,6 +424,7 @@ pecdl:	push	bc
 	call	getword		; comment length
 	call	skpstring	; skip past comment
 	ret
+endif
 ;
 ; plfh - read local file header, then extract/check file
 ;
@@ -398,7 +473,7 @@ plfh2:	call	getstring	; rets DE pointing past last char read
 ; to get to the final leafname. Does not make sense to have '-j'
 ; turned off as CP/M does not have directories.
 ;
-; NOTE: The ZipFile specification specifies that directory separators
+; NOTE: The ZipFile specification specifies that directory seperators
 ; inside a ZIP file are '/' characters, regardless of what the host's
 ; directory separators are.
 ;
@@ -413,7 +488,7 @@ junk2:	ld	a,(hl)
 	inc	hl
 	and	a
 	jr	z,junked	; end of filename, hl=>leafname
-	cp	'/'		; Zipfile directory separator
+	cp	'/'		; Zipfile directory seperator
 	jr	z,junk1		; set this as start of leafname
 	jr	junk2		; otherwise check next char
 
@@ -426,7 +501,6 @@ junked:	ld	a,(de)
 ; *NOTE* If a directory entry erroneously has a data field, will run
 ; into it and get 'Bad Zip file' error.
 
-;	ld	de,junk
 	ld	hl,opfn
 	ld	b,8
 	call	scanfn
@@ -443,15 +517,21 @@ nodot:	ld	b,3
 	ld	a,(mode)
 resmod:	ld	(curmode),a
 	or	a
-	jr	z,extrct	; zero = list without extracting
+	jp	z,listit	; zero = list without extracting
 mtched:	call	setout		; log output user
-	ld	de,opfcb	; see if output file already exists
-	ld	c,fopen
+	ld	de,opfcb
+	ld	a,(opts)
+	bit	1,a
+	jr	z,ifthere	; [O]verwrite off
+	ld	c,ferase	; delete any existing file
+	call	bdos
+	jr	saveit
+ifthere:
+	ld	c,fopen		; see if output file already exists
 	call	bdos
 	inc	a
 	jr	nz,exists
-; To do: Add Overwrite option (should be default)
-	ld	b,11
+saveit:	ld	b,11
 	ld	hl,opfn
 	ld	de,mtchfcb
 mtchlp:	ld	a,(de)
@@ -473,19 +553,26 @@ nomtch:	ld	hl,junk
 exists:	ld	hl,junk		; it exists, so skip it
 	call	pstr
 	call	ilprt
-	db	' exists',0
+	db	' -- exists',0
+	xor	a
+	ld	(curmode),a
+	ld	(zipeof),a
+	jr	doext2
+;	jp	badskp
+
 noex:	call	ilprt
 	db	' -- not extracting  ',0
 	xor	a
-	jr	resmod
+	jp	resmod
 ;
-extrct:	xor	a
+extrct:
+listit:	xor	a
 	ld	(zipeof),a
 	ld	a,(curmode)
 	or	a
 	jr	nz,doext
-	call	ilprt
-	db	'Checking ',0
+;	call	ilprt
+;	db	'Checking ',0
 	jr	pjunk
 ;
 creok:	call	setout
@@ -500,13 +587,14 @@ creok:	call	setout
 	call	pstr
 	jr	noex
 ;
-opnok1:	call	ilprt
-	db	'Extracting ',0
-pjunk:	ld	hl,junk
+opnok1:
+;	call	ilprt
+;	db	'Extracting ',0
+pjunk:	ld	hl,junk		; print filename
 	call	pstr
 doext:	call	ilprt
 	db	' -- ',0
-	ld	hl,(cs)
+doext2:	ld	hl,(cs)
 	ld	de,(cs + 2)
 	ld	a,d
 	or	e
@@ -518,6 +606,14 @@ doext:	call	ilprt
 neof:	inc	hl
 	inc	(hl)
 	ld	a,(cm)
+	cp	9
+	jr	nc,badzip
+	ld	a,(curmode)
+	or	a
+	jr	z,caseck
+	call	ilprt
+	db	'extracting ',0
+caseck:	ld	a,(cm)
 	or	a
 	jr	nz,case1
 case0w:	ld	a,(zipeof)
@@ -548,13 +644,13 @@ trydfl:	cp	6
 	jr	closeo
 ;
 badzip:	call	ilprt
-	db	'Unknown compression method',CR,LF,0
+	db	'unknown compression method',CR,LF,0
 badskp:	ld	a,(zipeof)
 	and	1
 	jr	nz,closeo
 	call	getbyte
 	jr	badskp
-	ret
+;	ret
 ;
 closeo:	ld	hl,zipeof
 	dec	(hl)
@@ -599,12 +695,18 @@ crcclp:	ld	a,(de)
 	db	'CRC error',CR,LF,0
 	jr	wildck
 ;
-crcok:	call	ilprt
+crcok:	ld	a,(mode)
+	or	a
+	jr	z,crcok2
+	call	ilprt
+	DB	CR,LF,0
+	jr	wildck
+crcok2:	call	ilprt
 	db	'CRC OK',CR,LF,0
 wildck:	ld	a,(curmode)
 	or	a
 	ret	z
-	ld	hl,mtchfcb
+wild2:	ld	hl,mtchfcb
 	ld	bc,11
 	ld	a,'?'
 	cpir
@@ -719,12 +821,10 @@ scanfn:	ld	a,(de)
 	dec	b
 	jp	m,scanfn
 	and	7fh		; remove high bit
-	cp	60h		; convert to UPPERCASE
-	jr	c,scfu
-;	cp	'a'		; convert to UPPERCASE
-;	jr	c,scfu
-;	cp	'z'+1
-;	jr	nc,scfu
+	cp	'a'		; convert to UPPERCASE
+	jr	c,scfu		; use same scheme as CCP
+	cp	'z'+1		; only convert letters
+	jr	nc,scfu
 	sub	20h
 scfu:	ld	(hl),a
 	inc	hl
@@ -736,20 +836,25 @@ nocopy:	dec	b
 	inc	hl
 	jr	nocopy
 ;
+ilprt0:	xor	a
+	ld	(opts),a	; force [Q]uiet off
 ilprt:	pop	hl
 	call	pstr
 	jp	(hl)
 ;
-pstr:	ld	a,(hl)
+pstr:	ld	bc,(opts-1)	; d=options
+pstrlp:	ld	a,(hl)
 	or	a
 	ret	z
+	bit	4,b
+	jr	nz,pskip	; [Q]uiet
 	push	hl
 	ld	e,a
 	ld	c,conout
-	call	bdos
+	call	bdos		; B preserved
 	pop	hl
-	inc	hl
-	jr	pstr
+pskip:	inc	hl
+	jr	pstrlp
 ;
 ; getstring must return DE pointing just past the last byte read.
 ;
@@ -2279,7 +2384,7 @@ ckcon0:	ld	de,opfcb	; ckcon0 jumped to for write error
 	call	bdos
 	call	ilprt
 	db	'Partial file erased -- ',0
-ckcon1:	call	ilprt
+ckcon1:	call	ilprt0
 	db	'Aborted',0
 	jp	exit
 ;
@@ -2311,12 +2416,18 @@ setbth:	ld	e,a
 ;
 ; usage -- show syntax for ZCPR3 ("dir:") or vanilla CP/M ("d:")
 ;
-usage:	call	ilprt
-	db	'UNZIP  Version '
+usage:	call	ilprt0
+	db	'UNZIP  v'
 	db	Vers/10+'0','.',Vers mod 10+'0'
 	db	Revisn mod 10+'0'	;;v1.5-1 identify revision
-	db	' - DPG',CR,LF
-	db	'Usage: '
+	DB	' - JGH '
+	DB	(VersDD/10)+'0',(VersDD mod 10)+'0'
+	DB	'/'
+	DB	(VersMM/10)+'0',(VersMM mod 10)+'0'
+	DB	'/'
+	DB	(VersYY/1000)+'0',((VersYY/100) mod 10)+'0'
+	DB	((VersYY/10) mod 10)+'0',(VersYY mod 10)+'0'
+	db	CR,LF,'Usage: '
 	db	'UNZIP {d',0
 	ld	hl,(Z3EAdr)
 	ld	a,h
@@ -2325,7 +2436,7 @@ usage:	call	ilprt
 	call	ilprt
 	db	'ir',0
 usage2:	call	ilprt
-	db	':}zipfile {d',0
+	db	':}<zipfile>[.zip] {d',0
 	ld	hl,(Z3EAdr)
 	ld	a,h
 	or	l
@@ -2333,9 +2444,9 @@ usage2:	call	ilprt
 	call	ilprt
 	db	'ir',0
 usage3:	call	ilprt
-	db	':}{afn.typ}',CR,LF
+	db	':}{afn.typ} [OQ]',CR,LF
 	db	'If a destination is given, files are extracted.',CR,LF
-	db	'If not, files are checked and listed.',0
+	db	'If not, files are checked and listed.',CR,LF,0
 	jp	exit
 ;
 ; data storage . . .
@@ -2566,6 +2677,7 @@ oldstk:	ds	2
 inusr:	ds	1
 outusr:	ds	1
 mode:	ds	1
+opts:	ds	1
 junk:	ds	STRSIZ
 lfh:				; data read from local file header
 vnte:	ds	2		; version

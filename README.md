@@ -2,7 +2,7 @@
 
 This is UNZIP for CP/M in Zilog Z80 assembler.
 
-**LATEST NEWS:**  Further speed optimisations.
+**LATEST NEWS:**  CP/M version enhancements.
 
 The latest release is V1.5-6 (CP/M) or V1.8-7 (Z-system) and may be
 downloaded in CP/M library file format from -
@@ -33,12 +33,25 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
-### August 24. 2023
+### August 27. 2023
 
-The CP/M version has been modified by Jonathon Harston to junk (ignore)
-file paths (if present in the ZIP file).  The sign-on message is also now
-only output when run without command-line parameters.  I've also bumped
-the version to V1.5-6.
+The CP/M version V1.5-6 has been modified by Jonathon Harston to -
+
+* Junk (ignore) file paths (if present in the ZIP file),
+
+* Return to the command processor instead of warm-booting on exit,
+
+* Added [Q]uiet and [O]verwite options to extract files silently and
+to overwrite existing files of the same name, and
+
+* The sign-on message is now only output when run without
+command-line parameters.
+
+In addition, the ZIPDIR utility have been updated to display a 4-digit
+year for file datestamps, and the CRC as a 32-bit number.  This new
+version 1.5 is available from
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir15.lbr
 
 
 ### September 19, 2021

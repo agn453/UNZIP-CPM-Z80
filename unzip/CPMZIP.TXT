@@ -1,0 +1,97 @@
+Introduction
+------------
+ZIP archiving is probably the most common method of archiving files, and
+one of the most common methods of file compression. CPMZip consists of
+programs that allow you to create, extract and examine ZIP archives.
+
+The supplied programs are ZIP, UNZIP and ZIPDIR. They perform the following
+actions:
+
+    ZIPDIR  - v1.50 - Lists the contents of a ZIP file
+    UNZIP   - v1.56 - Extracts stored files from a ZIP file
+    ZIP     - v0.00 - Creates ZIP file, storing files
+
+Brief usage details
+-------------------
+   ZIPDIR <zipfile> [options]
+   ?		Display the ZIPDIR command and usage information.
+
+   UNZIP <zipfile> <exspec> [options]
+   exspec	Directory into which files will be extracted. 
+   ?		Display the UNZIP command and usage information.
+   O		Overwrite existing files.
+   Q		Quiet mode.
+
+   ZIP <zipfile> <infiles> [options]
+   infiles	Wildcarded specification of files to include.
+   ?		Display the ZIP command and usage information.
+   Q		Quiet mode.
+
+If a command is run without any parameters, the usage information is displayed.
+Options are supplied in [square brackets].
+
+ZIPDIR will pause every 23 lines and wait for a keypress. SPACE will display one
+more line, CTRL-C will abort, any other key will display another 23 lines.
+
+Examples
+--------
+   ZIPDIR CPMZIP.ZIP		- list the entries in CPMZIP.ZIP, with information
+				  about each file. Any directories are stripped
+				  from the filenames, entries that are directories
+				  are listed suffixed with '/' and stored as "Dir.".
+
+   UNZIP SAMPLES.ZIP		- lists the files in SAMPLES.ZIP. Note this is
+				  different to the default on other platforms.
+   UNZIP SAMPLES.ZIP A:		- extracts from SAMPLES.ZIP and writes them to
+   				  drive A. Any existing files will not be
+   				  overwritten. The filenames are listed as they
+   				  are extracted.
+   UNZIP SAMPLES.ZIP *.*	- extracts to the current drive.
+   UNZIP SAMPLES.ZIP B:*.TXT	- extract to drive B: files that match *.TXT.
+   UNZIP SAMPLES.ZIP A: [O]	- extracts from SAMPLES.ZIP and overwrites any
+				  existing files.
+   UNZIP SAMPLES.ZIP A: [OQ]	- extracts from SAMPLES.ZIP and overwrites any
+				  existing files, and display no output.
+
+   ZIP A:DEMO.ZIP B:*.TXT	- create the ZIP archive A:DEMO.ZIP with the
+				  files that match B:*.TXT. The filenames are
+				  listed as they are included.
+   ZIP A:DEMO.ZIP B:*.TXT [Q]	- as above, but performed silently.
+
+Technical Details
+-----------------
+A ZIP file consists of a series of entries in the following format:
+
+	local file header signature     4 bytes  "PK",&03,&04
+	version needed to extract       2 bytes
+	general purpose bit flag        2 bytes
+	compression method              2 bytes
+	last modification time          2 bytes  in MS-DOS format
+	last modification date          2 bytes  in MS-DOS format
+	crc-32                          4 bytes
+	compressed size                 4 bytes
+	uncompressed size               4 bytes
+	filename length                 2 bytes
+	extra field length              2 bytes
+	filename                       (variable size)
+	extra field                    (variable size)
+	data                           (variable size)
+
+CP/M does not support subdirectories, so on extracting files and path
+is junked as though with the the InfoZip -j option. Filenames are
+forced to upper case and truncated to 8.3 filenames.
+
+CP/M does not support time/date stamps, so these are ignored. CPMZIP3
+supports time/date stamps on CP/M systems with date support such as
+ZSDOS and CP/M Plus.
+
+Version History
+---------------
+ZIPDIR was originally written by S. Greenberg with updates by Bruce Morgen,
+Howard Goldstein, Lars Nelson and Jonathan Harston.
+
+UNZIP was originally written by David P. Goodenough with updates by Gene
+Pizzetta, Bruce Morgen, Howard Goldstein, Martin, Russell Marks, Tony
+Nicholson and Jonathan Harston.
+
+ZIP was written by Jonathan Harston.

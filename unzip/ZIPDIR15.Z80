@@ -1,0 +1,1413 @@
+;******************************************************************************
+;*									      *
+;*				ZIPDIR v1.5				      *
+;*			 ZipFile Directory Lister			      *
+;*									      *
+;******************************************************************************
+
+Vers	equ	150
+VersDD	equ	20
+VersMM	equ	02
+VersYY	equ	2021
+
+; v1.5 20 Feb 2021, General tidying up.
+;	Tweeked to assemble with ZMac.
+;	Build with: zmac -o zipdir.com -x zipdir.lst zipdir15.z80
+;	Full date, CRC listed as 32-bit number, fixed default extension 'ZIP'.
+;	Control characters in filename not printed. Directory entries listed.
+;						- Jonathan Harston
+
+; v1.4 07 Nov 2020, "Maintenance Update"
+;	Fixed problem zero length filenames.
+;						- Lars Nelson
+
+; v1.3 29 Apr 1992, "Maintenance Update"
+;	Fixed alignment problem and incorrect disk space display on
+;	subsequent files when a member file is undated.  Added code at
+;	MEMLP: to skip over file comments.  This eliminates the "Zipfile
+;	corrupt" abort when a comment is present.
+;						- Howard Goldstein
+
+; v1.2 12 Jul 1990, "Maintenance Update"
+;	Re-synced versions by putting in J.Foy's code for "imploded"
+;	zipfile members from HIS "v1.1" of 8/89.  Any and all confusion
+;	is MY fault, NOT his!
+;						- Bruce Morgen
+
+; v1.1 10 Jul 1990, "Maintenance Update"
+;	Added modest run-time ZCPR3 support, no re-assembly or patching needed
+;	for RCP/M use under Z3, now supports the DU:/DIR: (under Z3) and "//"
+;	(help query for all systems) conventions.
+;						- Bruce Morgen
+
+; v1.0 15 Mar 1989  Initial release.
+
+; Note: This code is hereby placed into the public domain HOWEVER a great
+;	deal of the code is taken directly from the listing routines of
+;	Robert A. Freed's UNARC program and used with permission. These
+;	routines may be subject to to the same restrictions stated in the
+;	current version of that program.	 - S. Greenberg  03/15/89
+
+
+	.Z80
+	ASEG
+	ORG	100H
+	TITLE	ZIPDIR
+
+NO	EQU	0
+YES	EQU	NOT NO
+
+WBFLAG	EQU	NO		; Yes if program is to warm boot on exit
+WHEEL	EQU	003EH		; Wheel byte address if used on an RCP/M
+				; - (only used to prevent listing SYS files)
+LPSCRN	EQU	23		; Lines per screen before [more] pause.
+
+;--- Ascii equates ---
+;
+CTLC	EQU	'C'-'@'		; Control-C (console abort)
+CTLK	EQU	'K'-'@'		; Control-K (alternate abort)
+BEL	EQU	'G'-'@'		; Bell
+HT	EQU	'I'-'@'		; Horizontal tab
+LF	EQU	'J'-'@'		; Line feed
+CR	EQU	'M'-'@'		; Carriage return
+CTLS	EQU	'S'-'@'		; Control-S (suspend output)
+CTLZ	EQU	'Z'-'@'		; Control-Z (CP/M end-of-file)
+DEL	EQU	7FH		; Delete/rubout
+REP	EQU	'P'-'@'+80H	; Repeated byte flag (DLE with msb set)
+
+;--- CP/M address equates ---
+;
+BOOT	EQU	0000H		; Warm boot address
+BDOS	EQU	0005H		; Bdos entrypoint
+FCB	EQU	5CH		; Default file control block #1
+
+;--- BDOS function equates ---
+;
+CONIN	EQU	1		; Console input (single char)
+CONOUT	EQU	2		; Output single char to console
+CONST	EQU	11		; Get console status
+OPEN	EQU	15		; Open file
+CLOSE	EQU	16		; Close file
+FREAD	EQU	20		; Read file (sequential)
+SETDMA	EQU	26		; Set dma address
+GSUSER	EQU	32		; Get/Set User Number
+RDRND	EQU	33		; Read random
+GTSIZE	EQU	35		; Compute file size
+	EJECT
+
+;--- FCB offsets ---
+
+@DR	EQU	0		; Drive code
+@FN	EQU	1		; File name
+@FT	EQU	9		; File type
+@Z3USR	EQU	13		; User Number (ZCPR3/ZSDOS convention)
+@CR	EQU	32		; Current record
+@R0	EQU	33		; Random record field R0 (LS byte)
+@R1	EQU	34		; Random record field R1
+@R2	EQU	35		; Random record field R2 (MS byte)
+@FCBSX	EQU	35		; Extended FCB size for random I/O
+
+;--- ZIP file equates ---
+;
+SIG0	EQU	50H		; End of central directory signature (LS byte)
+SIG1	EQU	4BH		; (next byte)
+SIG2	EQU	05H		; (next byte)
+SIG3	EQU	06H		; End of central directory signature (MS byte)
+
+; End of Central Directory Record offsets (only fields used are included here)
+;
+@SIG	EQU	0		; (4) End of central directory record signature
+@NFILS	EQU	10		; (2) #of entries in the central directory
+@CDOFF	EQU	16		; (4) offset- beg of file to start of cent. dir
+
+; Note: Structure of the individual central directory entries is indicated
+; by the data structure HDRBUF at the end of the program.
+
+	EJECT
+;..............................................................................
+;
+; Open the file and find the end of it.
+;
+ENTRY:	JP	BEGIN
+	DB	'Z3ENV',1
+ENVADR:	DW	00
+BEGIN:	LD	(OLDSTK),SP	; Save system stack pointer
+	LD	SP,STACK	; Set to local area
+	LD	HL,(FCB+@FN)	; Any filename supplied?
+	LD	A,L
+	CP	' '		;
+	JP	Z,GIVUSG	; If not, give usage
+	CP	'?'		;
+	JP	Z,GIVUSG	; ?   - give usage
+	CP	'/'
+	JP	Z,GIVUSG	; /?  - give usage
+	CP	'['
+	JP	Z,GIVUSG	; [?] - give usage
+	LD	HL,(ENVADR)	; Z3 detection stuff
+	LD	A,L
+	OR	H
+	JR	Z,NOTZ3		; 0000H at ENVADR means no Z3ENV
+	LD	E,0FFH		; Retrieve and store entry user code
+	LD	C,GSUSER	; (this is super-ultra tidyness)
+	CALL	BDOSAV		; Call DOS, preserving all but A reg
+	LD	(OLDUSR),A
+	LD	A,(FCB+@Z3USR)	; Get and log into Z3-parsed user area
+	LD	E,A
+	CALL	BDOSAV		; Call DOS, preserving all but A reg
+	LD	DE,29H		; Offset to wheel address in DE
+	ADD	HL,DE		; Add it to environment address
+	LD	E,(HL)		; LSB in E
+	INC	HL		; Bump pointer
+	LD	D,(HL)		; MSB in D
+	LD	(WHLADR),DE	; Poke into ZIPDIR
+	LD	DE,6		; Offset to CRT selection
+	ADD	HL,DE		; Add it in
+	LD	E,3		; D=0, so DE=0003h
+	LD	A,(HL)		; Get selected CRT # in A
+	OR	A		; Test for zero
+	JR	Z,CRT0		; If CRT #0, just 3 bumps
+	ADD	HL,DE		; Otherwise 6 bumps
+CRT0:	ADD	HL,DE
+	LD	A,(HL)		; Get "usable" CRT lines
+	JR	Z3CRT
+
+NOTZ3:	LD	HL,(WHEEL)
+	LD	(WHLADR),HL
+	LD	A,LPSCRN	;
+Z3CRT:	LD	(LPSCT),A	; Init lines per screen counter
+	LD	A,1
+	LD	(LBLKSZ),A	; & disk block size (not sure why this
+				; this isn't just an EQU....)
+
+	LD	A,(FCB+@FT)	; See if any filetype was specified
+	CP	' '		;
+	JR	NZ,SKPZIP	; If so, leave it as is
+
+	LD	HL,'IP'		; Else inject a ".ZIP" extension
+	LD	(FCB+@FT+1),HL	;
+	LD	A,'Z'		;
+	LD	(FCB+@FT+0),A	;
+
+SKPZIP:	LD	HL,FCB+12	; Init FCB to all 0s except drive & filename
+	LD	B,@FCBSX-12	;
+ZLP2:	LD	(HL),0		;
+	INC	HL		;
+	DJNZ	ZLP2		;
+
+	LD	C,OPEN		; Attempt to open the file
+	CALL	FCBDOS		; (calls BDOS with DE = FCB)
+	INC	A		;
+	JP	Z,NOSUCH	; If no such file..
+
+	LD	A,(FCB+10)	; Check if file has SYS attribute
+	AND	80H		; (for security when program is used online)
+	JR	Z,NONSYS	; If not, it's OK
+	LD	HL,(WHLADR)
+	LD	A,(HL)		; If so, check if wheel byte is set
+	OR	A		;
+	JP	Z,NOSUCH	; SYS file w/o wheel byte: pretend no such file
+
+NONSYS:	LD	C,SETDMA	; Set DMA addr to memory area following prgm
+	LD	DE,PAGE		;
+	CALL	BDOSAV		;
+
+	LD	C,FREAD		; Initially perform a seq. read to guarantee
+	CALL	FCBDOS		; - proper FCB initialization (data not used)
+
+	LD	C,GTSIZE	; Get file size so we can access the last rec
+	CALL	FCBDOS		; Returns value in FCB+@R2,R1,R0
+
+	LD	A,(FCB+@R2)	; Disallow the 8 meg case
+	OR	A		;
+	JP	NZ,TOOBIG	;
+	EJECT
+;..............................................................................
+;
+; Search for the 4 byte sequence which comprises the End of Central Directory
+; Record signature. The signature and the rest of the End Record which follows
+; it should be completely contained within the last two records of the file,
+; but it may not if the file was padded during transmission or if the ZIP file
+; contains a long ZIP file comment. For file size of L records, this code will
+; read the last two records, L-2 and L-1, into a page of memory at PAGE. If the
+; signature is not found, the code will try again, this time reading records
+; L-3 and L-2 into memory at PAGE.  This is not optimally efficent, but the
+; number of re-reads is very small in practice so the time penalty is slight.
+
+;................................
+				;
+AGAIN:	LD	DE,-1		; Come back here if a re-read is necessary
+	LD	HL,(FCB+@R0)	; Last record# plus one (on 1st pass, anyway)
+	ADD	HL,DE		; Subtract two
+	JP	NC,BADZIP	; Don't go below zero
+	CALL	CABORT		; This process is abortable
+	CALL	READ2		; Read 2 recs (HL, HL+1) into PAGE+0, PAGE+80H
+
+;................................
+				;
+	LD	IX,PAGE		;
+	LD	B,255-3		;
+				;
+MTCHLP:	LD	A,(IX+@SIG+0)	; Search for end of central directory
+	CP	SIG0		; Signature - (50H,4BH,05H,06H)
+	JR	NZ,NOMTCH	;
+	LD	A,(IX+@SIG+1)	;
+	CP	SIG1		;
+	JR	NZ,NOMTCH	;
+	LD	A,(IX+@SIG+2)	;
+	CP	SIG2		;
+	JR	NZ,NOMTCH	;
+	LD	A,(IX+@SIG+3)	;
+	CP	SIG3		;
+	JR	Z,MATCH		; Match; IX now points to start of central dir
+NOMTCH:	INC	IX		;
+	DJNZ	MTCHLP		;
+;...............................;
+
+	JP	AGAIN		; No match, try again
+	EJECT
+;..............................................................................
+;
+; The End Record signature has been located. Use the values contained in the
+; End Record to locate the start of the central directory itself.
+;
+MATCH:	LD	H,(IX+@NFILS+1)	; Get #of files, save it in NFILES
+	LD	L,(IX+@NFILS+0)	;
+	LD	(NFILES),HL	;
+
+	LD	A,(IX+@CDOFF+3)	; Get offset to start of central directory
+	OR	A		; Way too big if MS byte is non-zero
+	JP	NZ,TOOBIG	;
+	LD	H,(IX+@CDOFF+2)	; Will divide the val by 128 to get #of records
+	LD	L,(IX+@CDOFF+1)	;
+	LD	A,(IX+@CDOFF+0)	;
+	PUSH	AF		;
+	AND	7FH		; First get the remainder from the div by 128
+	LD	C,A		; (that will be the offset within the record)
+	LD	B,0		; That value now in BC
+	PUSH	BC		;
+	POP	IY		; Now in IY
+	POP	AF		; Get back orig LS byte
+	RLA			; Divide HL,A by a left shift
+	RL	L		;
+	RL	H		;
+	JP	C,TOOBIG	; Too big if HL was originally > 8000H
+	LD	(FCB+@R0),HL	; Else put the value in the random rec# field
+	EJECT
+;.............................................................................
+;
+; Now we are ready to read central directory data into memory. A single
+; random read will position the file properly (R0, R1 are already set).
+; The offset to the beginning of the data in the first record is in IY.
+
+	LD	DE,PAGE+80H	; A record at a time goes into this half page
+	LD	C,SETDMA	;
+	CALL	BDOSAV		;
+	LD	C,RDRND		; Perform a random read to position the file
+	CALL	FCBDOS		;
+	LD	C,FREAD		; Read the 1st record. After this, use GETDTA.
+	CALL	FCBDOS		;
+
+	PUSH	IY		; Relative offset to start of real data
+	POP	HL		;
+	LD	DE,PAGE+80H-1	; Convert it from a relative to absolute value
+	ADD	HL,DE		;
+	LD	(DTAPTR),HL	; Inititialize "READTA"'s internal pointer
+
+	LD	HL,TOTS		; Initialize all the "totals" data to zero
+	LD	B,TOTC		;
+CLRTOT:	LD	(HL),0		;
+	INC	HL		;
+	DJNZ	CLRTOT		;
+	EJECT
+;..............................................................................
+;
+; Main loop, 1 iteration/filename. Read one file header's worth of information
+; into the structure named HDRBUF. Then process the information, using the
+; named offsets of HDRBUF to refer to it. Repeat for each file.
+;
+MEMLP:	LD	DE,HDRBUF	; Destination spec for GETDTA
+	LD	BC,HDRLEN	; Byte count for same
+	CALL	GETDTA		; Do it
+
+	LD	BC,(NAMLEN)	; Read the filename field into NAMBUF
+	PUSH	BC		; BC is size of field
+	LD	DE,NAMBUF	; Destination spec
+	CALL	GETDTA		; Do it
+
+	LD	HL,NAMBUF	; Spec source of data for DONAME
+	POP	BC		; Field length spec for DONAME
+	CALL	DONAME		; Process NAMBUF into NAME (see routine)
+
+	LD	BC,(XLEN)	; Extra field length
+	LD	DE,NAMBUF	; Spec target area, but data gets thrown out
+	PUSH	DE
+	CALL	GETDTA		; Read the extra field, and ignore it
+
+	LD	BC,(COMLEN)	; Comment field length
+	POP	DE		; Use same target area
+	CALL	GETDTA		; Read the comment field, and ignore it
+
+	CALL	CABORT		; Check for ^C, ^S, etc.
+	CALL	LISTF		; Process and list the whole entry
+
+	LD	HL,(NFILES)	; Decr #of files counter
+	DEC	HL		;
+	LD	(NFILES),HL	;
+	LD	A,H		;
+	OR	L		;
+	JR	NZ,MEMLP	; And loop until done
+;...............................;
+
+	CALL	LISTT		; Done with all files; list totals
+	JP	RETCCP		; And exit the program
+	EJECT
+;..............................................................................
+;
+; Routine to read spec'd #of bytes from the file to spec'd destination area
+;
+; Entry: BC has #of bytes we want to read from file
+;	 DE is destination pointer
+;	 "DTAPTR" keeps track of internal position within buffer "PAGE"
+;
+GETDTA:	LD	A,B		; Check if zero bytes needed
+	CP	16		; This is a practical consideration - if this
+	JP	NC,BADZIP	; - routine is called to read 4k+, there is
+	OR	C		; - a serious problem. Prevent overwriting BDOS
+	RET	Z		; Return when zero bytes needed.
+	DEC	BC		; Else decr byte counter in advance
+	LD	HL,(DTAPTR)	; Internal [source] pointer
+	INC	L		; We are using 2nd half of page aligned bfr,
+	CALL	Z,RELOD		; - so when l=0, time to reload and reset hl
+	LD	(DTAPTR),HL	; Updated value
+	LD	A,(HL)		; Get a byte
+	LD	(DE),A		; Put it in its destination
+	INC	DE		; Incr dest pointer
+	JR	GETDTA		; And possible loop for more data
+
+;................................
+				;
+RELOD:	PUSH	DE		;
+	PUSH	BC		;
+	LD	DE,PAGE+80H	; Read 1 record to 2nd half of this page
+	LD	H,D		; Reset HL to this value for the program's use
+	LD	L,E		;
+	LD	C,SETDMA	;
+	CALL	BDOSAV		;
+	LD	C,FREAD		;
+	CALL	FCBDOS		;
+	POP	BC		; Rtn w/ HL reset, BC and DE unaffected
+	POP	DE		;
+	RET			;
+;...............................;
+	EJECT
+;..............................................................................
+;
+; Filename processing code.
+;
+; Entry: BC has length of filename field
+;	 HL points to filename field
+;	 NAME is a 12 byte target area for processed filename
+;
+; Plan of attack: First strip off any pathnames contained in the filename
+; field. This is accomplished by searching for any "/" characters; if one
+; is found the effective beginning (and length) of the filename field is
+; adjusted so as to start in a position one past the slash character; the
+; process is repeated to find any additional slash characters.  Note, this
+; process can lead to zero length file names representing a directory
+; entry. In this case, backs up and prints filename with '/' to indicate
+; directory, and sets INTATR directory flag.
+; Next, we attempt to force the filename to fit an "8.3" mold (up to 8 chars,
+; a dot, and up to 3 chars). If this is possible, the filename is displayed
+; with appropriate additional spaces injected to align the dots. If, on the
+; other hand, the filename has more than 8 characters before any dot, or has
+; more than three characters following a dot, or has more than one dot, then
+; up to 12 characters of the filename are displayed, left justified, with
+; no additional spaces. If, in this case, the #of characters in the filename
+; is greater than 12, then a ? will be displayed in the 1st column followed
+; by the filename truncated to a length of eleven. [Concept due to Bob Freed]
+
+DONAME:	PUSH	BC		; Init 'name' to 12 blanks
+	PUSH	HL		;
+	LD	HL,NAME		;
+	LD	B,12		;
+BLP:	LD	(HL),' '	;
+	INC	HL		;
+	DJNZ	BLP		;
+	POP	HL		;
+	POP	BC		;
+
+;................................
+				;
+SVINFO:	LD	A,B
+	OR	C
+	JR	Z,SVINF2	; Last char is '/', display as dirname
+	LD	(NPTR),HL	; Current pointer to beginning of field
+SVINF1:	LD	(NLEN),BC	; Current value of length of field
+	LD	A,'/'		; Character to search for
+	CPIR			; Do it
+	JR	Z,SVINFO	; If found, re-save BC and HL (one past patch)
+;...............................;
+
+SVINF2:	LD	(INTATR),A	; Save 0=Dir, <>0=File
+	LD	IX,(NPTR)	; IX: Source pointer
+	LD	HL,(NLEN)	; HL: Overall field size counter
+	DEC	HL		; (since it will decr to -1, not zero)
+	LD	DE,-1		; DE: -1, used to decr HL
+	LD	IY,NAME		; IY: Dest pointer
+	LD	B,8		; B: Counts down from 8, then from 3
+
+;................................
+				;
+LP8:	CALL	GETCHR		; Get validated character, incr pointer
+LP8A:	CP	'.'		; Dot?
+	JR	Z,GOTDOT	; Br if so
+	LD	(IY),A		; Else xfer to dest and incr that pntr
+	INC	IY		;
+	ADD	HL,DE		; Decr overall count
+	RET	NC		; Means we are done
+	DJNZ	LP8		; Counts down from 8
+;...............................;
+	EJECT
+	LD	A,(IX)		; After 8 chars, check if next is a dot
+	INC	IX		;
+	CP	'.'		;
+	JR	NZ,LJFF		; If not, exit and go use left-justified format
+
+GOTDOT:	ADD	HL,DE		; Decr overall count to account for the dot
+	RET	NC		; Means we are done
+	LD	B,3		; Length of ext part of filename
+	LD	IY,NAME+9	; One past '.' in destination
+	LD	(IY-1),'.'	; Put dot in
+
+;................................
+				;
+LP3:	CALL	GETCHR		; Get validated character, incr pointer
+	CP	'.'		; (a second dot violates the 8.3 format)
+	JR	Z,LJFF		;
+	LD	(IY),A		; Char goes here
+	INC	IY		;
+	ADD	HL,DE		; Decr overall count
+	RET	NC		; Rtn if done
+	DJNZ	LP3		; Else loop
+;...............................;
+
+	JR	LJFF		; More than 3 chars after dot, violates 8.3
+
+GETCHR:	LD	A,(IX)		; Get character
+	INC	IX		; Step to next
+	AND	127		; Strip bit 7
+	CP	127
+	JR	Z,GETCH7	; Don't allow CHR$127 (DEL)
+	CP	32
+	RET	NC		; Printable character
+GETCH7:	LD	A,32		; Replace control chars with space
+	RET
+
+;..............................................................................
+;
+; Filename is not 8.3 format. Display up to 12 characters, left justified, with
+; no further processing. If >12 chars, display "?" plus first 11 characters.
+;
+LJFF:	LD	BC,(NLEN)	;
+	LD	A,B		; Check if overall length is >12
+	OR	A		;
+	JR	NZ,TRUNC	; Indeed, it is over 256!
+	LD	A,C		;
+	CP	13		;
+	JR	NC,TRUNC	; If it is over 12
+
+	LD	DE,NAME		; Destination
+XF:	LD	HL,(NPTR)	; Beginning of source field
+	LDIR			; Do it
+	RET			; And return
+
+TRUNC:	LD	A,'?'		; Inject a leading "?", indicating truncation
+	LD	(NAME+0),A	;
+	LD	BC,11		; #of filename characters we can now display
+	LD	DE,NAME+1	; Start them here
+	JR	XF		; Use code above to xfer 11 characters
+	EJECT
+;..............................................................................
+;
+; Misc. subroutines
+
+;................................
+				;
+READ2:	LD	DE,PAGE		; Random reads 2 records (HL, HL+1) to PAGE
+	CALL	RD1		; Read the first
+	INC	HL		; Incr rec#
+	LD	DE,PAGE+80H	; Advance dma pntr
+RD1:	LD	(FCB+@R0),HL	; Set rec#
+	LD	C,SETDMA	;
+	CALL	BDOSAV		; Set dma
+	LD	C,RDRND		;
+	CALL	FCBDOS		; Perform the read
+	RET			;
+;...............................;
+	EJECT
+
+;..............................................................................
+;
+; Terminate. Return to CCP, or do a warm boot if desired
+;
+RETCCP:	LD	HL,(ENVADR)
+	LD	A,L
+	OR	H
+	LD	A,(OLDUSR)
+	LD	E,A
+	LD	C,GSUSER
+	CALL	NZ,BDOS
+	 IF	WBFLAG
+	JP	BOOT
+	 ELSE
+	LD	SP,(OLDSTK)
+	RET
+	 ENDIF
+;..............................................................................
+;
+GIVUSG:	LD	DE,USAGE	; Give usage instructions and exit
+	CALL	PRINTS
+	LD	HL,(ENVADR)	; Check for Z3 environment
+	LD	A,L
+	OR	H
+	LD	DE,USAGE2
+	CALL	NZ,PRINTS	; Show "du:" stuff if Z3
+	LD	DE,USAGE3	; Complete the help response
+	CALL	PRINTL
+	JR	RETCCP
+
+TOOBIG:	LD	DE,TBMSG	; Type "ZIPfile too large" and exit
+	JR	MSGRTS		;
+
+BADZIP:	LD	DE,BZMSG	; Type "ZIPfile corrupt" and exit
+	JR	MSGRTS		;
+
+NOSUCH:	LD	DE,NSMSG	; Type "ZIPfile not found" and exit
+	JR	MSGRTS		;
+
+ABORT:	LD	DE,ABMSG	; Type "++ Aborted ++" and exit
+MSGRTS:	CALL	PRINTX		;
+	JR	RETCCP		;
+
+;..............................................................................
+;
+BDOSAV:	PUSH	BC		; Call bdos; save all regs (except A)
+	PUSH	DE		;
+	PUSH	HL		;
+	PUSH	IX		;
+	PUSH	IY		;
+	CALL	BDOS		;
+	POP	IY		;
+	POP	IX		;
+	POP	HL		;
+	POP	DE		;
+	POP	BC		;
+	RET			;
+;..............................................................................
+;
+FCBDOS:	PUSH	DE		; Call bdos with DE = fcb; restore DE on exit
+	LD	DE,FCB		;
+	CALL	BDOSAV		;
+	POP	DE		;
+	RET			;
+
+; ==========================================================================
+; All code below this point is taken nearly verbatim from R. Freed's UNARC16
+; ==========================================================================
+
+;	TITLE	LISTING	ROUTINES
+	EJECT
+; List file information
+
+LISTF:	LD	HL,(TFILES)	; Get total files so far
+	LD	A,H		; Test if this is first file
+	OR	L
+	INC	HL		; Add one more
+	LD	(TFILES),HL	; Update total files
+	CALL	Z,LTITLE	; If first file, list column titles
+
+	LD	DE,SIZE		; Point to compressed file size
+	PUSH	DE		; Save for later
+	LD	HL,TSIZE	; Update total compressed size
+	CALL	LADD
+
+	LD	DE,LEN		; Point to uncompressed length
+	PUSH	DE		; Save for later
+	LD	HL,TLEN		; Update total length
+	CALL	LADD
+
+	LD	HL,LINE		; Set up listing line pointer
+	LD	DE,NAME		; List file name from output FCB
+	LD	C,0		; (with blank fill)
+	CALL	LNAME
+
+	POP	DE		; Recover file length ptr
+	PUSH	DE		; Save again for factor calculation
+	CALL	LTODA		; List file length
+	CALL	LDISK		; Compute and list disk space
+	CALL	LSTOW		; List stowage method and version
+	POP	BC		; Restore uncompressed length ptr
+	POP	DE		; Restore compressed size ptr
+	CALL	LSIZE		; List size and compression factor
+	LD	A,(DATE)	; Check for valid file date
+	OR	A		; (This anticipates no-date CP/M files)
+	JR	NZ,LIST1	; Skip if valid
+
+	LD	B,17		; Else, clear out date and time fields
+	CALL	FILLB
+	JR	LIST2		; Skip
+
+LIST1:	CALL	LDATE		; List file date
+	CALL	LTIME		; List file time
+
+LIST2:	CALL	LCRC		; List CRC value
+
+	EJECT
+; Terminate and print listing line
+
+LISTL:	LD	DE,LINE		; Set up listing line ptr
+	JR	LIST3		; Go finish up and list it
+
+; List file totals
+
+LISTT:	LD	HL,LINE		; Set up listing line ptr
+	LD	DE,(TFILES)	; List total files
+	CALL	WTODA
+	LD	DE,TLEN		; List total file length
+	PUSH	DE		; And save ptr for factor calculation
+	CALL	LTODA
+	LD	DE,(TDISK)	; List total disk space
+	CALL	LDISK1
+	LD	B,8		; Fill next columns with blanks
+	CALL	FILLB
+	POP	BC		; Recover total uncompressed length ptr
+	LD	DE,TSIZE	; Get total compressed size ptr
+	CALL	LSIZE		; List overall size, compression factor
+	LD	B,21		; Fill next columns with blanks
+	CALL	FILLB
+	LD	DE,(TCRC32+2)	; List sum of all CRC values
+	CALL	WHEX		;
+	LD	DE,(TCRC32+0)	; LS word
+	CALL	WHEX		;
+	LD	DE,TOTALS	; Point to totals string (precedes line)
+
+LIST3:	LD	(HL),0		; Terminate listing line
+	JR	PRINTL		; Go print it, followed by new line
+
+; Print character. Saves all registers except A.
+
+PCHAR:	PUSH	DE		; Save register
+
+PCHAR2:	LD	E,A		; Set up char
+	PUSH	BC
+	LD	C,CONOUT	; Send to BDOS console output
+	CALL	BDOSAV
+	POP	BC
+	POP	DE		; Restore register
+	RET			; Return
+
+; Print string on new line, then start another
+
+PRINTX:	CALL	CRLF
+
+; Print string, then start new line
+
+PRINTL:	CALL	PRINTS
+
+; Start new line
+; Note: Must preserve DE
+
+CRLF:	LD	A,CR
+	CALL	PCHAR
+	LD	A,LF
+	CALL	PCHAR
+
+	LD	HL,LPSCT	; Reached end of screen?
+	DEC	(HL)
+	RET	NZ		; No, return
+
+	LD	A,LPSCRN	; But are screen pauses enabled?
+LPS	EQU	$-1		; (lines per screen = 0 if not)
+	OR	A
+	RET	Z		; No, return
+
+	LD	(HL),A		; Reset count of lines left
+	PUSH	DE		; Save register
+	LD	DE,MORE		; Print '[more]' on the new line
+	CALL	PRINTS
+
+CRLF1:	CALL	CABORT		; Wait for char (or ^C abort)
+	JR	Z,CRLF1
+
+	PUSH	AF		; Save input response
+	LD	DE,NOMORE	; Blank out the '[more]' line
+	CALL	PRINTS
+	POP	AF		; Restore response
+	POP	DE		; Restore register
+	XOR	' '		; Was response the space bar?
+	RET	NZ		; Anything else scrolls another screen
+
+	INC	A		; Yes, set to pause after one more line
+	LD	(LPSCT),A
+	RET			; Return
+
+	EJECT
+; Print string on new line
+
+; Note: Restricted to at most 5 stack levels (c.f. CHECK).  CRLF will
+;	not perform page pause during this restriction, but PCHAR will
+;	execute PNAME (during ABOMSG print), so we're now at the limit!
+
+; Print NUL-terminated string
+
+PRINTS:	LD	A,(DE)
+	OR	A
+	RET	Z
+
+	CALL	P,PCHAR		; (Ignore help msg chars with MSB set)
+	INC	DE
+	JR	PRINTS
+
+	EJECT
+; List column titles
+
+; Note: This saves some much-needed space, by using the same template
+;	to generate the title line and the 'equal signs' separator line.
+
+LTITLE:	LD	DE,TITLES
+	PUSH	DE
+	LD	A,(DE)
+
+LTITL1:	CP	'='		; For titles, convert '=' to blank
+	JR	NZ,LTITL2
+	LD	A,' '
+
+LTITL2:	CALL	PCHAR
+	INC	DE
+	LD	A,(DE)
+	OR	A
+	JR	NZ,LTITL1
+
+	POP	DE
+	CALL	CRLF
+
+LTITL3:	LD	A,(DE)
+	OR	A
+	JR	Z,CRLF
+
+	CP	' '		; Separator converts non-blank to '='
+	JR	Z,LTITL4
+	LD	A,'='
+
+LTITL4:	CALL	PCHAR
+	INC	DE
+	JR	LTITL3
+
+	EJECT
+; List file name (rewritten for ZIP)
+;
+LNAME:	LD	BC,12
+	EX	DE,HL
+	LDIR
+	EX	DE,HL
+	RET
+
+	EJECT
+; Compute and list disk space for uncompressed file
+
+LDISK:	PUSH	HL		; Save line ptr
+	LD	HL,(LEN)	; Convert file length to 1k disk space
+	LD	A,(LEN+2)	; (Most we can handle here is 16 Mb)
+	LD	DE,1023		; First, round up to next 1k
+	ADD	HL,DE
+	ADC	A,0
+	RRA			; Now, shift to divide by 1k
+	RR	H
+	RRA
+	RR	H
+	AND	3FH
+	LD	L,H		; Result -> HL
+	LD	H,A
+	LD	A,(LBLKSZ)	; Get disk block size
+	DEC	A		; Round up result accordingly
+	LD	E,A
+	LD	D,0
+	ADD	HL,DE
+	CPL			; Form mask for lower bits
+	AND	L
+	LD	E,A		; Final result -> DE
+	LD	D,H
+	LD	HL,(TDISK)	; Update total disk space used
+	ADD	HL,DE
+	LD	(TDISK),HL
+	POP	HL		; Restore line ptr
+
+LDISK1:	CALL	WTODA		; List result
+	LD	(HL),'k'
+	INC	HL
+	RET
+
+	EJECT
+; List storage method and version
+
+LSTOW:	CALL	FILL2B		; Blanks first
+	EX	DE,HL
+	LD	HL,STOWTX	; Point to storage text table
+	LD	A,(INTATR)
+	AND	A
+	LD	A,10
+	JR	Z,NCLAMP	; INATR=0 - Directory
+	LD	A,(METHOD)	; Get header version no.
+;	CP	7
+;	cp	8		; one more due to imploding	25Aug89	[jsf]
+	cp	9		; two more due to red/tok	20Feb94 [jce]
+	JR	C,NCLAMP	; jmp if method<10
+;	LD	A,6
+;	ld	a,7		; one more due to imploding	25Aug89 [jsf]
+	ld	a,9		; two more due to red/tok	20Feb94 [jce]
+;
+NCLAMP:	SLA	A		; X2
+	LD	C,A		;
+	RLA			; X4
+	ADD	A,C		; X6
+	LD	C,A		;
+	LD	B,0		;
+	ADD	HL,BC		;
+	LD	BC,6		;
+
+LSTOW1:	LDIR			; List storage text
+	EX	DE,HL		; Restore line ptr
+	RET			;
+	EJECT
+; List compressed file size and compression factor
+
+LSIZE:	PUSH	DE		; Save compressed size ptr
+	PUSH	BC		; Save uncompressed length ptr
+	CALL	LTODA		; List compressed size
+	POP	DE		; Recover length ptr
+	EX	(SP),HL		; Save line ptr, recover size ptr
+
+; Compute compression factor = 100 - [100*size/length]
+; (HL = ptr to size, DE = ptr to length, A = result)
+
+	PUSH	DE		; Save length ptr
+	CALL	LGET		; Get BCDE = size
+	LD	H,B		; Compute 100*size
+	LD	L,C		; In HLIX:
+	PUSH	DE
+	POP	IX		; Size
+	ADD	IX,IX
+	ADC	HL,HL		; 2*size
+	ADD	IX,DE
+	ADC	HL,BC		; 3*size
+	ADD	IX,IX
+	ADC	HL,HL		; 6*size
+	ADD	IX,IX
+	ADC	HL,HL		; 12*size
+	ADD	IX,IX
+	ADC	HL,HL		; 24*size
+	ADD	IX,DE
+	ADC	HL,BC		; 25*size
+	ADD	IX,IX
+	ADC	HL,HL		; 50*size
+	ADD	IX,IX
+	ADC	HL,HL		; 100*size
+	EX	(SP),HL		; Swap back length ptr, save upper
+	CALL	LGET		; Get BCDE = length
+	PUSH	IX
+	POP	HL		; Now have (SP),HL = 100*size
+	LD	A,B		; Length = 0?
+	OR	C		; (Unlikely, but possible)
+	OR	D
+	OR	E
+	JR	Z,LSIZE2	; Yes, go return result = 0
+
+	LD	A,101		; Initialize down counter for result
+
+LSIZE1:	DEC	A		; Divide by successive subtractions
+	SBC	HL,DE
+	EX	(SP),HL
+	SBC	HL,BC
+	EX	(SP),HL
+	JR	NC,LSIZE1	; Loop until remainder < length
+
+LSIZE2:	POP	HL		; Clean stack
+	POP	HL		; Restore line ptr
+	CALL	BTODA		; List the factor
+	LD	(HL),'%'
+	INC	HL
+	RET			; Return
+	EJECT
+; List file creation date
+
+; ZIP files use MS-DOS 16-bit date format:
+;
+; Bits [15:9] = year - 1980
+; Bits	[8:5] = month of year
+; Bits	[4:0] = day of month
+;
+; (All zero means no date, checked before call to this routine)
+
+LDATE:	CALL	FILL2B		;
+	LD	A,(DATE)	; Get date
+	AND	1FH		; List day
+	CALL	LDATE2
+	LD	(HL),' '	; Then a blank
+	INC	HL
+	EX	DE,HL		; Save listing line ptr
+	LD	HL,(DATE)	; Get date again
+	PUSH	HL		; Save for listing year (in upper byte)
+	ADD	HL,HL		; Shift month into upper byte
+	ADD	HL,HL
+	ADD	HL,HL
+	LD	A,H		; Get month
+	AND	0FH
+	CP	13		; Make sure it's valid
+	JR	C,LDATE1
+	XOR	A		; (Else will show as "???")
+LDATE1:	LD	C,A		; Use to index to 3-byte string table
+	LD	B,0
+	LD	HL,MONTX
+	ADD	HL,BC
+	ADD	HL,BC
+	ADD	HL,BC
+	LD	C,3
+	LDIR			; Move month text into listing line
+	EX	DE,HL		; Restore line ptr
+	LD	(HL),' '	; Then a blank
+	INC	HL
+	POP	AF		; Recover high byte of date
+	SRL	A		; Get 1980-relative year
+	ADD	A,80		; Get true year in century
+	PUSH	AF		; Save the year
+	CP	100
+	LD	A,19		; 19xx
+	JR	C,LDATEC
+	POP	AF
+	PUSH	AF
+	CP	200
+	LD	A,20		; 20xx
+	JR	C,LDATEC
+	INC	A		; 21xx
+LDATEC:	CALL	LDATE2		; Print century
+	POP	AF		; Get year back, output least two digits
+
+LDATE2:	LD	BC,256*2+'0'	; Set up for 2 digits with high-zero fill
+	JP	BTOD		; And convert binary to decimal ASCII
+
+	EJECT
+; List file creation time
+
+; ZIP files use MS-DOS 16-bit time format:
+;
+; Bits [15:11] = hour
+; Bits [10:5]  = minute
+; Bits	[4:0]  = second/2 (not displayed)
+
+LTIME:	LD	B,1		;
+	CALL	FILLB		;
+	EX	DE,HL		; Save listing line ptr
+	LD	HL,(TIME)	; Fetch time
+	LD	A,H		; Copy high byte
+	RRA			; Get hour
+	RRA
+	RRA
+	AND	1FH
+
+LTIME2:	ADD	HL,HL		; Shift minutes up to high byte
+	ADD	HL,HL
+	ADD	HL,HL
+	PUSH	HL		; Save minutes
+	EX	DE,HL		; Recover listing line ptr
+	CALL	LDATE2		; List hour
+	LD	(HL),':'	; Then ":"
+	INC	HL
+	POP	AF		; Restore and list minutes
+	AND	3FH
+	JR	LDATE2
+
+	EJECT
+; List hex CRC value
+
+LCRC:	CALL	FILL2B
+	PUSH	HL
+	LD	HL,(TCRC32+0)	; Update CRC total
+	LD	DE,(CRC32+0)	; LS word
+	ADD	HL,DE
+	LD	(TCRC32+0),HL
+	LD	HL,(TCRC32+2)
+	LD	DE,(CRC32+2)	; MS word
+	ADC	HL,DE
+	LD	(TCRC32+2),HL
+	POP	HL
+
+	CALL	WHEX		; List ms word
+	LD	DE,(CRC32+0)	; Fall thru and list ls word
+
+; List hex word in DE
+
+WHEX:	CALL	DHEX
+	LD	D,E
+
+; List hex byte in D
+
+DHEX:	LD	(HL),D
+	RLD
+	CALL	AHEX
+	LD	A,D
+
+; List hex nibble in A
+
+AHEX:	OR	0F0H
+	DAA
+	CP	60H
+	SBC	A,1FH
+	LD	(HL),A
+	INC	HL
+	RET
+
+; A few decimal ASCII conversion callers, for convenience
+
+WTODA:	LD	B,5		; List blank-filled word in 5 cols
+WTODB:	LD	C,' '		; List blank-filled word in B cols
+	JR	WTOD		; List C-filled word in B cols
+
+BTODA:	LD	B,4		; List blank-filled byte in 4 cols
+BTODB:	LD	C,' '		; List blank-filled byte in B cols
+	JR	BTOD		; List C-filled byte in B cols
+
+LTODA:	LD	BC,8*256+' '	; List blank-filled long in 8 cols
+;	JR	LTOD		; fall through...
+
+	EJECT
+; Convert Long (or Word or Byte) Binary to Decimal ASCII
+; R. A. Freed
+; 2.0	15 Mar 85
+
+; Entry:	A  = Unsigned 8-bit byte value (BTOD)
+;		DE = Unsigned 16-bit word value (WTOD)
+;		DE = Pointer to low byte of 32-bit long value (LTOD)
+;		B  = Max. string length (0 implies 256, i.e. no limit)
+;		C  = High-zero fill (0 to suppress high-zero digits)
+;		HL = Address to store ASCII byte string
+;
+; Return:	HL = Adress of next byte after last stored
+;
+; Stack:	n+1 levels, where n = no. significant digits in output
+;
+; Notes:	If B > n, (B-n) leading fill chars (C non-zero) stored.
+;		If B < n, high-order (n-B) digits are suppressed.
+;		If only word or byte values need be converted, use the
+;		 shorter version of this routine (WTOD or BTOD) instead.
+
+RADIX	EQU	10		; (Will work with any radix <= 10)
+
+LTOD:	PUSH	DE		; Entry for 32-bit long pointed to by DE
+	EXX			; Save caller's regs, swap in alt set
+	POP	HL		; Get pointer and fetch value to HADE
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	LD	A,(HL)
+	INC	HL
+	LD	H,(HL)
+	EX	DE,HL		; Value now in DAHL
+	JR	LTOD1		; Join common code
+
+BTOD:	LD	E,A		; Entry for 8-bit byte in A
+	LD	D,0		; Copy to 16-bit word in DE
+
+WTOD:	PUSH	DE		; Entry for 16-bit word in DE, save it
+	EXX			; Swap in alt regs for local use
+	POP	HL		; Recover value in HL
+	XOR	A		; Set to clear upper bits in DE
+	LD	D,A
+
+; Common code for all entries
+
+LTOD1:	LD	E,A		; Now have 32-bit value in DEHL
+	LD	C,RADIX		; Set up radix for divides
+	SCF			; Set first-time flag
+	PUSH	AF		; Save for stack emptier when done
+
+	EJECT
+; Top of conversion loop
+
+; Method:  Generate output digits on stack in reverse order.  Each loop
+; divides the value by the radix.  Remainder is the next output digit,
+; quotient becomes the dividend for the next loop.  Stop when get zero
+; quotient or no. of digits = max. string length.  (Always generates at
+; least one digit, i.e. zero value has one "significant" digit.)
+
+LTOD2:	CALL	DIVLB		; Divide to get next digit
+	OR	'0'		; Convert to ASCII (clears carry)
+	EXX			; Swap in caller's regs
+	DJNZ	LTOD5		; Skip if still more room in string
+
+; All done (value fills string), this is the output loop
+
+LTOD3:	LD	(HL),A		; Store digit in string
+	INC	HL		; Bump string ptr
+
+LTOD4:	POP	AF		; Unstack next digit
+	JR	NC,LTOD3	; Loop if any
+
+	RET			; Return to caller
+
+; Still more room in string, test if more significant digits
+
+LTOD5:	PUSH	AF		; Stack this digit
+	EXX			; Swap back local regs
+	LD	A,H		; Last quotient = 0?
+	OR	L
+	OR	D
+	OR	E
+	JR	NZ,LTOD2	; No, loop for next digit
+
+; Can stop early (no more digits), handle leading zero-fill (if any)
+
+	EXX			; Swap back caller's regs
+	OR	C		; Any leading fill wanted?
+	JR	Z,LTOD4		; No, go to output loop
+
+LTOD6:	LD	(HL),A		; Store leading fill
+	INC	HL		; Bump string ptr
+	DJNZ	LTOD6		; Repeat until fill finished
+	JR	LTOD4		; Then go store the digits
+
+	EJECT
+;	TITLE	MISCELLANEOUS SUPPORT ROUTINES
+
+; Note: The following general-purpose routine is currently used in this
+;	program only to divide longs by 10 (by decimal convertor, LTOD).
+;	Thus, a few unneeded code locations have been commented out.
+;	(May be restored if program requirements change.)
+
+; Unsigned Integer Division of Long (or Word or Byte) by Byte
+; R. A. Freed
+
+; Divisor in C, dividend in (A)DEHL or (A)HL or L (depends on call used)
+; Quotient returned in DEHL (or just HL), remainder in A
+
+;DIVXLB:OR	A		; 40-bit dividend in ADEHL (A < C)
+;	JR	NZ,DIVLB1	; Skip if have more than 32 bits
+
+DIVLB:	LD	A,D		; 32-bit dividend in DEHL
+	OR	E		; But is it really only 16 bits?
+	JR	Z,DIVWB		; Yes, skip (speeds things up a lot)
+
+	XOR	A		; Clear high quotient for first divide
+
+DIVLB1:	CALL	DIVLB2		; Get upper quotient first, then swap:
+DIVLB2:	EX	DE,HL		; Upper quotient in DE, lower in HL
+
+DIVXWB:	OR	A		; 24-bit dividend in AHL (A < C)
+	JR	NZ,DIVWB1	; Skip if have more than 16 bits
+
+DIVWB:	LD	A,H		; 16-bit dividend in HL
+	CP	C		; Will quotient be less than 8 bits?
+	JR	C,DIVBB1	; Yes, skip (small dividend speed-up)
+
+	XOR	A		; Clear high quotient
+
+DIVWB1:	LD	B,16		; Set up count for 16-bit divide
+	JR	DIVB		; Skip to divide loop
+
+;DIVBB: XOR	A		; 8-bit dividend in L
+DIVBB1:	LD	H,L		; For very small nos., pre-shift 8 bits
+	LD	L,0		; High byte of quotient will be zero
+	LD	B,8		; Set up count for 8-bit divide
+
+; Top of divide loop (vanilla in-place shift-and-subtract)
+
+DIVB:	ADD	HL,HL		; Divide AHL (B=16) or AH (B=8) by C
+	RLA			; Shift out next remainder bit
+;	JR	C,DIVB1 	; (This needed only for divisors > 128)
+	CP	C		; Greater than divisor?
+	JR	C,DIVB2		; No, skip (next quotient bit is 0)
+
+DIVB1:	SUB	C		; Yes, reduce remainder
+	INC	L		; And set quotient bit to 1
+
+DIVB2:	DJNZ	DIVB		; Loop for no. bits in quotient
+	RET			; Done (quotient in HL, remainder in A)
+
+	EJECT
+; Fetch a long (4-byte) value
+
+LGET:	LD	E,(HL)		; Fetch BCDE from (HL)
+	INC	HL
+	LD	D,(HL)
+	INC	HL
+	LD	C,(HL)
+	INC	HL
+	LD	B,(HL)
+	RET
+
+; Add two longs
+
+LADD:	LD	B,4		; (DE) + (HL) -> (HL)
+	OR	A
+
+LADD1:	LD	A,(DE)
+	ADC	A,(HL)
+	LD	(HL),A
+	INC	HL
+	INC	DE
+	DJNZ	LADD1
+
+	RET
+
+; Fill routines
+
+FILL2B:	LD	B,2		; Fill 2 blanks
+
+FILLB:	LD	C,' '		; Fill B blanks
+
+FILL:	LD	(HL),C		; Fill B bytes with char in C
+	INC	HL
+	DJNZ	FILL
+	RET
+	EJECT
+
+; Check for CTRL-C abort (and/or read console char if any). Destroys C.
+
+CABORT:	LD	C,CONST		; Get console status
+	CALL	BDOSAV
+	OR	A		; Character ready?
+	RET	Z		; Return (Z set) if not
+
+	LD	C,CONIN		; Input console char (echo if printable)
+	CALL	BDOSAV
+
+; Note: Following added in UNARC 1.5 to handle any ^S input which is not
+;	detected by CP/M 2.2 BDOS.
+
+	AND	7FH		; Mask to 7 bits
+	CP	CTLS		; Is it CTRL-S (suspend output)?
+	LD	C,CONIN
+	CALL	Z,BDOSAV	; Yes, wait for another char
+	AND	7FH		; Mask to 7 bits
+
+	CP	CTLC		; Is it CTRL-C?
+	JR	Z,GABORT	; Yes, go abort
+
+	CP	CTLK		; Or is it CTRL-K (RCP/M alternate ^C)?
+	RET	NZ		; No, return char (and NZ) to caller
+
+GABORT:	JP	ABORT		; Abort
+
+	EJECT
+;	TITLE	MESSAGES AND INITIALIZED DATA
+
+MORE:	DB	'[more]',0
+NOMORE:	DB	CR,'       ',HT,CR,0
+
+ABMSG:	DB	'++ Aborted ++',0
+TBMSG:	DB	'Zipfile too large.',0
+BZMSG:	DB	'Zipfile corrupt.',0
+NSMSG:	DB	'Zipfile not found.',0
+
+USAGE:	DB	'ZIPDIR v'
+	DB	(Vers/100)+'0','.',((Vers/10) mod 10)+'0'
+	DB	(Vers mod 10)+'0'
+	DB	' - JGH '
+	DB	(VersDD/10)+'0',(VersDD mod 10)+'0'
+	DB	'/'
+	DB	(VersMM/10)+'0',(VersMM mod 10)+'0'
+	DB	'/'
+	DB	(VersYY/1000)+'0',((VersYY/100) mod 10)+'0'
+	DB	((VersYY/10) mod 10)+'0',(VersYY mod 10)+'0'
+	DB	CR,LF
+	DB	'Usage: ZIPDIR ',0
+USAGE2:	DB	'[du:]',0
+USAGE3:	DB	'<zipfile>[.zip]',0
+
+MONTX:	DB	'???JanFebMarAprMayJunJulAugSepOctNovDec'
+
+STOWTX:	DB	'Stored'
+	DB	'Shrunk'
+	DB	'Reduc1'
+	DB	'Reduc2'
+	DB	'Reduc3'
+	DB	'Reduc4'
+	DB	'Implod'		;for PKZIP 1.01		25Aug89 [jsf]
+	DB	'Token '		;			20Feb94 [jce]
+	DB	'Deflat'		;			20Feb94 [jce]
+	DB	' ???  '
+	DB	'Dir.  '
+
+TITLES:	DB	'Name========  Length  Disk  Method  Stored Save'
+	DB	'd ===Date==== =Time  ===CRC=='
+LINLEN	EQU	$-TITLES
+	DB	0
+
+TOTALS:	DB	'        ====  ======  ====          ======  ==='
+	DB	'                     ========'
+	DB	CR,LF
+	DB	'Total  '	; (LINE must follow!)
+;
+; uninitialized storage
+;
+LINE:	DS	LINLEN+1	; Listing line buffer (follow TOTALS!)
+
+OLDSTK:	DS	2		; Old system stack pointer
+LBLKSZ:	DS	1		; Disk allocation block size for listing
+
+;----
+;
+TOTS	EQU	$		; Start of listing totals
+
+TFILES:	DS	2		; Total files processed
+TLEN:	DS	4		; Total uncompressed bytes
+TDISK:	DS	2		; Total 1K disk blocks
+TSIZE:	DS	4		; Total compressed bytes
+TCRC32:	DS	4		; Total of all CRC values
+TOTC	EQU	$-TOTS		; Count of bytes to clear
+
+;................................
+				;
+HDRBUF	EQU	$		; ZIP file header buffer...
+				;
+SIG:	DS	4		; Central file header signature
+PRGVER:	DS	2		; Program version
+EXTVER:	DS	2		; Version needed to extract
+BITFLG:	DS	2		; General purpose bit flag
+METHOD:	DS	2		; Compression method
+TIME:	DS	2		; Modification time
+DATE:	DS	2		; Modification date
+CRC32:	DS	4		; 32-bit CRC check of uncompressed file
+SIZE:	DS	4		; Compressed bytes
+LEN:	DS	4		; Uncompressed bytes
+NAMLEN:	DS	2		; Filename length
+XLEN:	DS	2		; Extra field length
+COMLEN:	DS	2		; File comment length
+STDISK:	DS	2		; Starting disk number
+INTATR:	DS	2		; Internal file attributes
+EXTATR:	DS	4		; External file attributes
+HDRLOC:	DS	4		; Relative offset of local header
+				;
+HDRLEN	EQU	$-HDRBUF	; Length of all of the above
+;...............................;
+
+NAME:	DS	12		; Post-processed filename
+;...............................;
+
+LPSCT:	DS	1		; Lines per screen counter
+NFILES:	DS	2		; #of files in the ZIP to list
+NLEN:	DS	2		;
+NPTR:	DS	2		;
+DTAPTR:	DS	2		;
+WHLADR:	DS	2
+OLDUSR:	DS	1
+	DS	80H		; Stack area for program's use
+STACK	EQU	$		; ToS
+
+NXTPG	EQU	($+00FFH) AND (0FF00H)
+	ORG	NXTPG
+
+PAGE:	DS	100H
+NAMBUF	EQU	$
+
+	END
