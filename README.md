@@ -47,7 +47,7 @@ to overwrite existing files of the same name, and
 * The sign-on message is now only output when run without
 command-line parameters.
 
-In addition, the ZIPDIR utility have been updated to display a 4-digit
+In addition, the ZIPDIR utility has been updated to display a 4-digit
 year for file datestamps, and the CRC as a 32-bit number.  This new
 version 1.5 is available from
 
