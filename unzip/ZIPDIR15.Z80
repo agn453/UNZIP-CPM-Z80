@@ -235,7 +235,7 @@ NONSYS:	LD	C,SETDMA	; Set DMA addr to memory area following prgm
 
 ;................................
 				;
-AGAIN:	LD	DE,-1		; Come back here if a re-read is necessary
+AGAIN:	LD	DE,-2		; Come back here if a re-read is necessary
 	LD	HL,(FCB+@R0)	; Last record# plus one (on 1st pass, anyway)
 	ADD	HL,DE		; Subtract two
 	JP	NC,BADZIP	; Don't go below zero
@@ -653,7 +653,7 @@ LISTF:	LD	HL,(TFILES)	; Get total files so far
 	OR	A		; (This anticipates no-date CP/M files)
 	JR	NZ,LIST1	; Skip if valid
 
-	LD	B,17		; Else, clear out date and time fields
+	LD	B,19		; Else, clear out date and time fields
 	CALL	FILLB
 	JR	LIST2		; Skip
 

@@ -1,0 +1,855 @@
+	MACRO-80 3.44	09-Dec-81	PAGE	1
+
+
+                                ; ZIP.Z80
+                                ;
+                                ; Create ZIP archives for CPM
+                                ; J.G.Harston 06-Nov-2000
+                                ;
+                                ; 31-Aug-2023	Rewritten for ZMac
+                                ; Can be assembled with ZMAC with:
+                                ;	ZMAC -o ZIP.COM ZIP100.Z80
+                                ;
+                                ; To do: add support for CPM3 datestamps, add DU: support.
+                                ;
+  0064                          Vers		equ	100
+  0006                          VersDD		equ	06
+  000B                          VersMM		equ	11
+  07D0                          VersYY		equ	2000
+                                ;
+  0005                          bdos		equ	0005h
+  005C                          FCB1		equ	005Ch
+  006C                          FCB2		equ	006Ch
+  007C                          FCB1PTR		equ	FCB1+32	; Output pointer bytes
+  0080                          DMA		equ	0080h
+  0800                          CCPSIZE		equ	0800h
+  000C                          NAMELEN		equ	12	; "DFILENAMEEXT" in FCB
+                                ;
+  0002                          bd_conout	equ	2
+  0009                          bd_string	equ	9
+  000F                          bd_open		equ	15
+  0010                          bd_close	equ	16
+  0011                          bd_sfirst	equ	17
+  0012                          bd_snext	equ	18
+  0013                          bd_delete	equ	19
+  0014                          bd_read		equ	20
+  0015                          bd_write	equ	21
+  0016                          bd_make		equ	22
+  001A                          bd_setdma	equ	26
+  0023                          bd_getsize	equ	35
+  0024                          bd_setptr	equ	36
+                                ;
+U                               PR1HEX		equ	&FFAA
+U                               PR2HEX		equ	&FFAD
+U                               OSNEWL		equ	&FFE7
+                                
+                                	org   100h
+  0100'   C3 010B'              	jp    Start
+  0103'   5A 33 45 4E           	db    'Z3ENV',1		; Z3 signiture
+  0107'   56 01                 
+  0109'   0000                  Z3EAdr:	dw    0
+                                ;
+                                ; Code run once, could be overwritten
+  010B'   ED 73 05E6'           Start:	ld   (OldStack),sp	; save old stack
+  010F'   2A 0006               	ld   hl,(bdos+1)	; start of BDOS
+  0112'   11 F800               	ld   de,-CCPSIZE	; allow for CCP
+  0115'   19                    	add  hl,de
+  0116'   F9                    	ld   sp,hl		; put stack at top of memory
+  0117'   CD 011F'              	call Start0		; call main program
+  011A'   ED 7B 05E6'           Exit:	ld   sp,(OldStack)	; recover stack
+	MACRO-80 3.44	09-Dec-81	PAGE	1-1
+
+
+  011E'   C9                    	ret
+                                
+  011F'   21 05E8'              Start0:	ld   hl,ZeroStart
+  0122'   11 05E9'              	ld   de,ZeroStart+1
+  0125'   01 0008               	ld   bc,ZeroEnd-ZeroStart-1
+  0128'   36 00                 	ld   (hl),0
+  012A'   ED B0                 	ldir			; Zero workspace
+  012C'   3A 006D                       ld   a,(FCB2+1)
+  012F'   FE 20                 	cp   32
+  0131'   CA 04E3'                      jp   z,ZipSyntax	; No filenames
+                                ;	ld   hl,0081h		; hl=>start of line, zero terminated
+                                ; note: documentation claims the command line at &0080 is unterminated, but
+                                ; DRCCP terminates the line with &00, as do other CCPs that follow the same
+                                ; practice.
+  0134'   21 0080               	ld	hl,0080h	; command buffer
+  0137'   6E                    	ld	l,(hl)		; get length
+  0138'   CB FD                 	set	7,l		; point after end of line
+  013A'   23                    	inc	hl
+  013B'   36 00                 	ld	(hl),0		; put terminator in
+  013D'   2E 81                 	ld	l,81h		; hl=>start of line
+  013F'   01 0000               OptLp1:	ld   bc,0		; b=0, options
+  0142'   7E                    	ld   a,(hl)		; get character
+  0143'   23                    	inc  hl
+  0144'   FE 20                 	cp   ' '
+  0146'   28 F7                 	jr   z,OptLp1		; skip spaces
+  0148'   38 25                 	jr   c,OptDone		; end of command line
+  014A'   FE 5B                 	cp   '['
+  014C'   28 0A                 	jr   z,Opts		; start of options string
+  014E'   7E                    Optlp3:	ld   a,(hl)
+  014F'   23                    	inc  hl
+  0150'   FE 20                 	cp   ' '
+  0152'   28 EB                 	jr   z,OptLp1
+  0154'   30 F8                 	jr   nc,OptLp3		; skip filename
+  0156'   18 17                 	jr   OptDone		; end of command line
+  0158'   7E                    Opts:	ld   a,(hl)
+  0159'   23                    	inc  hl
+  015A'   FE 20                 	cp   ' '
+  015C'   28 E1                 	jr   z,OptLp1		; another filename
+  015E'   FE 3F                 	cp   '?'
+  0160'   CA 04E3'              	jp   z,ZipSyntax	; ZIP [?] - display usage
+  0163'   E6 5F                 	and  05Fh		; upper case
+  0165'   28 08                 	jr   z,OptDone		; end of command line
+  0167'   FE 5D                 	cp   ']'
+  0169'   30 04                 	jr   nc,OptDone		; end of options
+  016B'   B0                    	or   b
+  016C'   47                    	ld   b,a
+  016D'   18 E9                 	jr   Opts
+  016F'                         OptDone:
+  016F'   ED 43 05E8'           	ld   (Options-1),bc	; note options, also zero Pass
+                                ; bit 1 = [O]verwrite
+                                ; bit 4 = [Q]uiet
+                                ;
+                                ; Check for output file
+  0173'   CB 48                 	BIT  1,B
+  0175'   28 08                 	JR   Z,DeleteOk		; [O]verwrite off
+  0177'   11 005C               	LD   DE,FCB1
+	MACRO-80 3.44	09-Dec-81	PAGE	1-2
+
+
+  017A'   0E 13                 	LD   C,bd_delete	; Delete any existing file
+  017C'   CD 0005               	CALL bdos
+  017F'                         DeleteOk:
+                                
+                                ; GRRRRR Any call to bd_make kills FindFirst and FindNext
+                                ; So, have to build up a list of source files first, and then
+                                ; do the copying.
+                                ; ARAGH!G!HG!I^%!&^$!^%#!!
+                                ;
+  017F'   11 0652'              	LD   DE,MemStore	; HL=>heap to make list of names
+  0182'   0E 11                         LD   C,bd_sfirst
+  0184'                         ScanLoop:
+  0184'   C5                    	PUSH BC
+  0185'   D5                    	PUSH DE
+  0186'   11 006C                       LD   DE,FCB2
+  0189'   CD 0005                       CALL bdos		; Search directory
+  018C'   D1                            POP  DE
+  018D'   C1                            POP  BC
+  018E'   3C                    	INC  A
+  018F'   28 20                 	JR   Z,ScanDone		; No more files
+  0191'   87                            ADD  A,A
+  0192'   87                            ADD  A,A
+  0193'   87                            ADD  A,A
+  0194'   87                            ADD  A,A
+  0195'   87                            ADD  A,A		; Multiply by 32 to point to entry
+  0196'   C6 60                 	ADD  A,DMA-32		; Point to start of filename
+  0198'   6F                    	LD   L,A
+  0199'   26 00                         LD   H,DMA/256		; HL=>entry
+  019B'   3A 006C                       LD   A,(FCB2+0)		; Source drive
+  019E'   77                            LD   (HL),A		; Put into file list
+  019F'   01 000C               	LD   BC,NAMELEN		; DRIVE+FILENAME+EXT
+  01A2'   ED B0                 	LDIR			; Copy name to heap
+  01A4'   21 FF4C               	LD   HL,-&180		; 128buffer+128buffer+128stack
+  01A7'   39                    	ADD  HL,SP		; HL=SP-&180
+  01A8'   ED 52                 	SBC  HL,DE		; HL=SP-&180-heaptop
+U 01AA'   DA 0000               	JP   C,ErrOutOfMem
+  01AD'   0E 12                         LD   C,bd_snext
+  01AF'   18 D3                 	JR   ScanLoop
+  01B1'                         ScanDone:
+  01B1'   3D                    	DEC  A
+  01B2'   12                    	LD   (DE),A		; &FF terminator
+  01B3'   13                    	INC  DE
+  01B4'   ED 53 05EF'           	LD   (OutputBuffer),DE
+  01B8'   21 0080               	LD   HL,128
+  01BB'   19                    	ADD  HL,DE
+  01BC'   22 05ED'              	LD   (InputBuffer),HL
+                                ;
+                                ; Open output file
+  01BF'   11 005C               	LD   DE,FCB1
+  01C2'   0E 11                 	LD   C,bd_sfirst	; Test for output file
+  01C4'   CD 0005               	CALL bdos
+  01C7'   3C                    	INC  A
+U 01C8'   C2 0000               	JP   NZ,ErrFileExists
+  01CB'   11 005C               	LD   DE,FCB1
+  01CE'   0E 16                 	LD   C,bd_make		; Create output file
+  01D0'   CD 0005               	CALL bdos
+	MACRO-80 3.44	09-Dec-81	PAGE	1-3
+
+
+  01D3'   3C                    	INC  A
+U 01D4'   CA 0000               	JP   Z,ErrDirFull
+                                ; Can no longer use FCB2 as it is now the metadata for FCB1
+                                
+                                ;
+                                ; Now go through list of names
+  01D7'                         FileStart:
+  01D7'   21 0652'              	LD   HL,MemStore	; HL=>heap to make list of names
+  01DA'                         FileLoop:
+  01DA'   7E                    	LD   A,(HL)		; HL=>filename
+  01DB'   3C                    	INC  A
+  01DC'   CA 02DA'              	JP   Z,FilesDone	; No more files
+  01DF'   11 05F1'              	LD   DE,FCB3
+  01E2'   01 000C               	LD   BC,NAMELEN
+  01E5'   ED B0                 	LDIR			; Copy name to FCB3
+  01E7'   E5                    	PUSH HL
+  01E8'   21 061A'              	LD   HL,Header+0	; Clear header workspace
+  01EB'   11 061B'              	LD   DE,Header+1
+  01EE'   01 0037               	LD   BC,HeaderEnd-Header-1
+  01F1'   36 00                 	LD   (HL),0
+  01F3'   ED B0                 	LDIR
+  01F5'   21 504B               	LD   HL,'PK'
+  01F8'   3A 05E8'              	LD   A,(Pass)
+  01FB'   A7                    	AND  A
+  01FC'   28 0E                 	JR   Z,FileData		; Pass=0, data segment
+  01FE'   22 0618'              	LD   (DirSig+0),HL	; Directory signiture
+  0201'   21 00C9               	LD   HL,&0201
+  0204'   22 061A'              	LD   (DirSig+2),HL
+  0207'   21 0646'              	LD   HL,DirName		; HL=>name store in header
+  020A'   18 13                 	JR   FileDataGo
+  020C'                         FileData:
+  020C'   22 061A'              	LD   (HdrSig+0),HL
+  020F'   21 0193               	LD   HL,&0403		; Put data signiture in
+  0212'   22 061C'              	LD   (HdrSig+2),HL
+  0215'   21 05EA'              	LD   HL,NumFiles
+  0218'   34                    	INC  (HL)
+U 0219'   CA 0000               	JP   Z,ShutTooManyFiles
+  021C'   21 0638'              	LD   HL,HdrName		; HL=>name store in header
+  021F'                         FileDataGo:
+  021F'   11 05F2'              	LD   DE,FCB3+1		; DE=>name in FCB3
+  0222'   01 0000               	LD   BC,0		; BC= Filename length
+  0225'                         NameLoop:
+  0225'   7B                    	LD   A,E
+O 0226'   D6 FF                 	SUB  FCB3 & 255
+  0228'   FE 0C                 	CP   12
+  022A'   28 1D                 	JR   Z,NameDone		; All 12 chars done
+  022C'   FE 09                 	CP   9
+  022E'   CC 023C'              	CALL Z,NameDot		; Insert dot
+  0231'   1A                    	LD   A,(DE)
+  0232'   13                    	INC  DE
+  0233'   FE 20                 	CP   ' '
+  0235'   28 EE                 	JR   Z,NameLoop		; Truncate spaces
+  0237'   CD 0242'              	CALL NamePut
+  023A'   18 E9                 	JR   NameLoop
+  023C'                         NameDot:
+  023C'   1A                    	LD   A,(DE)
+	MACRO-80 3.44	09-Dec-81	PAGE	1-4
+
+
+  023D'   FE 21                 	CP   '!'
+  023F'   3E 2E                 	LD   A,'.'
+  0241'   D8                    	RET  C			; Don't output dot if no extension
+  0242'                         NamePut:
+  0242'   77                    	LD   (HL),A		; Store it in header
+  0243'   CD 049D'              	CALL PRCHAR		; Print character
+  0246'   23                    	INC  HL
+  0247'   03                    	INC  BC
+  0248'   C9                    	RET
+  0249'                         NameDone:
+  0249'   ED 43 0634'           	LD   (HdrNameSz),BC	; Store name size
+  024D'   11 05F1'              	LD   DE,FCB3
+  0250'   0E 23                 	LD   C,bd_getsize	; get file size
+  0252'   CD 0005               	CALL bdos
+  0255'   ED 5B 0611'           	LD   DE,(FCB3PTR+0)
+  0259'   2A 0613'              	LD   HL,(FCB3PTR+2)
+  025C'   1E 00                 	LD   E,0
+  025E'   CB 3C                 	SRL  H
+  0260'   CB 1D                 	RR   L
+  0262'   CB 1A                 	RR   D
+  0264'   CB 1B                 	RR   E			; HLDE=records*128
+  0266'   ED 53 0630'           	LD   (HdrFSize+0),DE
+  026A'   ED 53 062C'           	LD   (HdrSize+0),DE
+  026E'   22 0632'              	LD   (HdrFSize+2),HL
+  0271'   22 062E'              	LD   (HdrSize+2),HL
+                                ;	CALL PR2HEX
+                                ;	EX   DE,HL
+                                ;	CALL PR2HEX
+                                
+  0274'   CD 03F6'              	CALL SavePTR		; save output PTR
+  0277'   CD 0359'              	CALL SaveHeader		; save header, also set CRC=&FFFFFFFF
+                                ;
+  027A'   AF                    	XOR  A
+  027B'   32 05FD'              	LD   (FCB3+12),A	; ex=0 for open
+  027E'   11 05F1'              	LD   DE,FCB3
+  0281'   0E 0F                 	LD   C,bd_open		; open input file
+  0283'   CD 0005               	CALL bdos
+  0286'   3C                    	INC  A
+U 0287'   CA 0000               	JP   Z,ShutInputFailed
+  028A'   21 0000               	LD   HL,0
+  028D'   22 0611'              	LD   (FCB3PTR+0),HL	; Set PTR to zero
+  0290'   22 0613'              	LD   (FCB3PTR+2),HL
+  0293'   3A 05E9'              	LD   A,(Options)
+  0296'   CB 67                 	BIT  4,A
+  0298'   20 08                 	JR   NZ,CopyLoop	; [Q]uiet
+  029A'   11 0566'              	LD   DE,MsgAdding
+  029D'   0E 09                 	LD   C,bd_string
+  029F'   CD 0005               	CALL bdos
+                                ;
+                                ; copy data
+  02A2'                         CopyLoop:
+  02A2'   ED 5B 05ED'           	LD   DE,(InputBuffer)
+  02A6'   0E 1A                 	LD   C,bd_setdma
+  02A8'   CD 0005               	CALL bdos
+  02AB'   11 05F1'              	LD   DE,FCB3
+  02AE'   0E 14                 	LD   C,bd_read
+	MACRO-80 3.44	09-Dec-81	PAGE	1-5
+
+
+  02B0'   CD 0005               	CALL bdos		; read 128-byte record
+  02B3'   A7                    	AND  A
+  02B4'   20 0C                 	JR   NZ,CopyEOF		; end of input file
+  02B6'   21 0080               	LD   HL,128
+  02B9'   ED 5B 05ED'           	LD   DE,(InputBuffer)
+  02BD'   CD 0382'              	CALL SaveData		; write 128 bytes to output
+  02C0'   18 E0                 	JR   CopyLoop
+  02C2'                         CopyEOF:
+                                ;	CALL PRHEX
+  02C2'   11 05F1'              	LD   DE,FCB3
+  02C5'   0E 10                 	LD   C,bd_close		; close input file
+  02C7'   CD 0005               	CALL bdos
+                                ;	LD   HL,(HdrCRC+2)
+                                ;	CALL PR2HEX
+                                ;	LD   HL,(HdrCRC+0)
+                                ;	CALL PR2HEX
+                                	
+                                ; Update header
+  02CA'   CD 040D'              	CALL RestorePTR		; move back to saved header
+  02CD'   CD 0359'              	CALL SaveHeader		; save updated header, also CRC=CRC EOR &FFFFFFFF
+  02D0'   CD 040D'              	CALL RestorePTR		; back to end of file
+                                ;
+  02D3'   CD 0496'              	CALL CRLF
+  02D6'   E1                    	POP  HL
+  02D7'   C3 01DA'              	JP   FileLoop
+                                
+  02DA'                         FilesDone:
+  02DA'   3E 10                 	LD   A,16
+  02DC'   32 05E9'              	LD   (Options),A	; On second pass, set to [Q]uiet
+  02DF'   3A 05E8'              	LD   A,(Pass)
+  02E2'   A7                    	AND  A
+  02E3'   CC 03F6'              	CALL Z,SavePTR		; Save pointer to end of data/start of directory
+  02E6'   CC 03D8'              	CALL Z,ConvertPTR	; Convert saved PTR to absolute offset
+  02E9'   3C                    	INC  A
+  02EA'   32 05E8'              	LD   (Pass),A
+  02ED'   FE 02                 	CP   2
+  02EF'   DA 01D7'              	JP   C,FileStart	; Do two passes
+                                
+                                ; Create EOF header
+  02F2'   21 504B               	LD   HL,'PK'		; Put signiture in
+  02F5'   22 061A'              	LD   (EOFSig+0),HL
+  02F8'   21 025D               	LD   HL,&0605
+  02FB'   22 061C'              	LD   (EOFSig+2),HL
+  02FE'   21 0000               	LD   HL,0
+  0301'   22 061E'              	LD   (EOFDiskThis),HL
+  0304'   22 0620'              	LD   (EOFDiskStart),HL
+  0307'   22 062E'              	LD   (EOFCommentSz),HL
+  030A'   2A 05EA'              	LD   HL,(NumFiles)
+  030D'   26 00                 	LD   H,0
+  030F'   22 0622'              	LD   (EOFFilesThis),HL
+  0312'   22 0624'              	LD   (EOFFilesTotal),HL
+                                
+U 0315'   2A 0000               	LD   HL,(SavedPTR+0)
+  0318'   22 062A'              	LD   (EOFDirOffset+0),HL
+U 031B'   2A 0002               	LD   HL,(SavedPTR+2)
+  031E'   22 062C'              	LD   (EOFDirOffset+2),HL
+	MACRO-80 3.44	09-Dec-81	PAGE	1-6
+
+
+                                
+  0321'   CD 03F6'              	CALL  SavePTR
+  0324'   CD 03D8'              	CALL  ConvertPTR
+  0327'   A7                    	AND  A
+U 0328'   2A 0000               	LD   HL,(SavedPTR+0)
+  032B'   ED 5B 062A'           	LD   DE,(EOFDirOffset+0)
+  032F'   ED 52                 	SBC  HL,DE
+  0331'   22 0626'              	LD   (EOFDirSize+0),HL
+                                
+U 0334'   2A 0002               	LD   HL,(SavedPTR+2)
+  0337'   ED 5B 062C'           	LD   DE,(EOFDirOffset+2)
+  033B'   ED 52                 	SBC  HL,DE
+  033D'   22 0628'              	LD   (EOFDirSize+2),HL
+                                	
+  0340'   21 0016               	LD   HL,EOFEnd-Header
+  0343'   CD 037C'              	CALL SaveEOF		; Save EOF segment
+  0346'   18 03                 	JR   CloseOutput
+                                
+  0348'                         ClosePad:
+  0348'   CD 0467'              	CALL PutZero
+  034B'                         CloseOutput:
+  034B'   3A 05EC'              	LD   A,(OutputOffset)
+  034E'   A7                    	AND  A
+  034F'   20 F7                 	JR   NZ,ClosePad	; Pad to end of sector
+  0351'                         ShutOutput:
+  0351'   11 005C               	LD   DE,FCB1
+  0354'   0E 10                 	LD   C,bd_close		; Close output file
+  0356'   C3 0005               	JP   bdos
+                                
+  0359'                         SaveHeader:
+  0359'   21 0628'              	LD   HL,HdrCRC
+  035C'   06 04                 	LD   B,4
+  035E'                         SaveCRC:
+  035E'   7E                    	LD   A,(HL)		; CRC = CRC EOR &FFFFFFFF
+  035F'   2F                    	CPL
+  0360'   77                    	LD   (HL),A
+  0361'   23                    	INC  HL
+  0362'   10 FA                 	DJNZ SaveCRC
+  0364'   ED 4B 0634'           	LD   BC,(HdrNameSz)	; Length of name field
+  0368'   21 001E               	LD   HL,HdrName-Header
+  036B'   09                    	ADD  HL,BC		; HL=length of header
+  036C'   3A 05E8'              	LD   A,(Pass)
+  036F'   A7                    	AND  A
+  0370'   28 0A                 	JR   Z,SaveEOF		; Pass=0, data header
+  0372'   01 0010               	LD   BC,16		; dir header is 16 bytes longer
+  0375'   09                    	ADD  HL,BC
+  0376'   11 0618'              	LD   DE,Directory
+  0379'   37                    	SCF			; CS=Header, don't build CRC
+  037A'   18 10                 	JR   SaveDataGo
+  037C'                         SaveEOF:
+  037C'   11 061A'              	LD   DE,Header
+  037F'   37                    	SCF			; CS=Header, don't build CRC
+  0380'   18 0A                 	JR   SaveDataGo
+                                ;
+                                ; HL=count, DE=start of data, FCB1=output file, CC=update CRC
+  0382'                         SaveData:
+	MACRO-80 3.44	09-Dec-81	PAGE	1-7
+
+
+  0382'   D9                    	EXX
+  0383'   ED 5B 0628'           	LD   DE,(HdrCRC+0)	; Incoming CRC
+  0387'   2A 062A'              	LD   HL,(HdrCRC+2)
+  038A'   D9                    	EXX
+  038B'   A7                    	AND  A			; CC=Data, build CRC
+  038C'                         SaveDataGo:
+  038C'   F5                    	PUSH AF
+  038D'                         SaveDataLp:
+  038D'   F1                    	POP  AF			; Get Carry flag back
+  038E'   F5                    	PUSH AF
+  038F'   1A                    	LD   A,(DE)
+  0390'   38 31                 	JR   C,SaveData2	; Don't update CRC
+                                
+                                ; The following code updates the CRC with the byte in A
+  0392'   F5                    	PUSH AF			; Save the byte
+  0393'   D9                    	EXX
+  0394'   AB                    	XOR  E			; XOR byte into CRC bottom byte
+  0395'   06 08                 	LD   B,8		; Prepare to rotate 8 bits
+  0397'   CB 3C                 CRClp:	SRL  H			; Rotate CRC
+  0399'   CB 1D                 	RR   L
+  039B'   CB 1A                 	RR   D
+  039D'   1F                    	RRA
+  039E'   30 10                 	JR   NC,CRCclear	; b0 was zero
+  03A0'   5F                    	LD   E,A		; Put CRC low byte back into E
+  03A1'   7C                    	LD   A,H
+U 03A2'   EE 00                 	XOR  &ED		; CRC=CRC XOR &EDB88320, ZIP polynomic
+  03A4'   67                    	LD   H,A
+  03A5'   7D                    	LD   A,L
+U 03A6'   EE 00                 	XOR  &B8
+  03A8'   6F                    	LD   L,A
+  03A9'   7A                    	LD   A,D
+  03AA'   EE 53                 	XOR  &83
+  03AC'   57                    	LD   D,A
+  03AD'   7B                    	LD   A,E
+  03AE'   EE 14                 	XOR  &20		; And get CRC low byte back into A
+  03B0'                         CRCclear:
+  03B0'   10 E5                 	DJNZ CRClp		; Loop for 8 bits
+  03B2'   5F                    	LD   E,A		; Put CRC low byte back into E
+  03B3'   D9                    	EXX
+  03B4'   3A 05E8'              	LD   A,(Pass)
+  03B7'   A7                    	AND  A
+  03B8'   20 06                 	JR   NZ,SaveData0	; Not data segment, don't output
+  03BA'   F1                    	POP  AF			; Get the byte back
+  03BB'   CD 0468'              	CALL PutByte		; Output data byte
+  03BE'   18 06                 	JR   SaveData3
+  03C0'                         SaveData0:
+  03C0'   F1                    	POP  AF			; Get the byte back
+  03C1'   18 03                 	JR   SaveData3
+                                ;
+  03C3'                         SaveData2:
+  03C3'   CD 0468'              	CALL PutByte		; Output header byte
+  03C6'                         SaveData3:
+  03C6'   13                    	INC  DE
+  03C7'   2B                    	DEC  HL
+  03C8'   7C                    	LD   A,H
+  03C9'   B5                    	OR   L
+	MACRO-80 3.44	09-Dec-81	PAGE	1-8
+
+
+  03CA'   20 C1                 	JR   NZ,SaveDataLp
+  03CC'   F1                    	POP  AF			; Get Carry back
+  03CD'   D8                    	RET  C			; Don't update CRC
+  03CE'   D9                    	EXX
+  03CF'   ED 53 0628'           	LD   (HdrCRC+0),DE	; Outgoing CRC
+  03D3'   22 062A'              	LD   (HdrCRC+2),HL
+  03D6'   D9                    	EXX
+  03D7'   C9                    	RET
+                                
+  03D8'                         ConvertPTR:
+  03D8'   F5                    	PUSH AF
+U 03D9'   3A 0004               	LD   A,(FCB1Saved+4)
+U 03DC'   ED 5B 0000            	LD   DE,(FCB1Saved+0)
+U 03E0'   2A 0002               	LD   HL,(FCB1Saved+2)
+  03E3'   87                    	ADD  A,A
+  03E4'   5F                    	LD   E,A
+  03E5'   CB 3C                 	SRL  H
+  03E7'   CB 1D                 	RR   L
+  03E9'   CB 1A                 	RR   D
+  03EB'   CB 1B                 	RR   E			; HLDE=records*128+Offset
+U 03ED'   ED 53 0000            	LD   (SavedPTR+0),DE
+U 03F1'   22 0002               	LD   (SavedPTR+2),HL
+  03F4'   F1                    	POP  AF
+  03F5'   C9                    	RET
+                                
+  03F6'                         SavePTR:
+  03F6'   F5                    	PUSH AF
+  03F7'   E5                    	PUSH HL
+  03F8'   2A 007C               	LD   HL,(FCB1PTR+0)
+U 03FB'   22 0000               	LD   (FCB1Saved+0),HL
+  03FE'   2A 007E               	LD   HL,(FCB1PTR+2)
+U 0401'   22 0002               	LD   (FCB1Saved+2),HL
+  0404'   3A 05EC'              	LD   A,(OutputOffset)
+U 0407'   32 0004               	LD   (FCB1Saved+4),A
+  040A'   E1                    	POP  HL
+  040B'   F1                    	POP  AF
+  040C'   C9                    	RET
+                                
+  040D'                         RestorePTR:
+  040D'   E5                            PUSH HL
+  040E'   D5                            PUSH DE
+  040F'   2A 007C               	LD   HL,(FCB1PTR+0)
+  0412'   E5                    	PUSH HL
+  0413'   2A 007E               	LD   HL,(FCB1PTR+2)
+  0416'   E5                    	PUSH HL
+  0417'   3A 05EC'              	LD   A,(OutputOffset)
+  041A'   F5                    	PUSH AF
+  041B'   CD 0463'              	CALL FlushSave		; Flush buffer to disk
+U 041E'   2A 0000               	LD   HL,(FCB1Saved+0)
+  0421'   22 007C               	LD   (FCB1PTR+0),HL
+U 0424'   2A 0002               	LD   HL,(FCB1Saved+2)
+  0427'   22 007E               	LD   (FCB1PTR+2),HL
+  042A'   11 005C               	LD   DE,FCB1
+  042D'   0E 24                 	LD   C,bd_setptr
+  042F'   CD 0005               	CALL bdos		; Set file pointer
+  0432'   11 005C               	LD   DE,FCB1
+	MACRO-80 3.44	09-Dec-81	PAGE	1-9
+
+
+  0435'   0E 14                 	LD   C,bd_read
+  0437'   CD 0005               	CALL bdos		; Read current sector
+U 043A'   2A 0000               	LD   HL,(FCB1Saved+0)
+  043D'   22 007C               	LD   (FCB1PTR+0),HL
+U 0440'   2A 0002               	LD   HL,(FCB1Saved+2)
+  0443'   22 007E               	LD   (FCB1PTR+2),HL
+  0446'   11 005C               	LD   DE,FCB1
+  0449'   0E 24                 	LD   C,bd_setptr
+  044B'   CD 0005               	CALL bdos		; Set file pointer again
+U 044E'   3A 0004               	LD   A,(FCB1Saved+4)
+  0451'   32 05EC'              	LD   (OutputOffset),A	; and set offset within buffer
+  0454'   F1                    	POP  AF
+U 0455'   32 0004               	LD   (FCB1Saved+4),A
+  0458'   E1                    	POP  HL
+U 0459'   22 0002               	LD   (FCB1Saved+2),HL
+  045C'   E1                    	POP  HL
+U 045D'   22 0000               	LD   (FCB1Saved+0),HL
+  0460'   D1                    	POP  DE
+  0461'   E1                    	POP  HL
+  0462'   C9                    	RET
+                                
+  0463'                         FlushSave:
+  0463'   E5                            PUSH HL
+  0464'   D5                            PUSH DE
+  0465'   18 1B                         JR   PutByteSave
+  0467'                         PutZero:
+  0467'   AF                    	XOR  A
+  0468'                         PutByte:
+  0468'   E5                            PUSH HL
+  0469'   D5                            PUSH DE
+  046A'   ED 5B 05EC'                   LD   DE,(OutputOffset)
+  046E'   16 00                         LD   D,0
+  0470'   2A 05EF'                      LD   HL,(OutputBuffer)
+  0473'   19                            ADD  HL,DE
+  0474'   77                    	LD   (HL),A
+  0475'   7B                    	LD   A,E
+  0476'   3C                    	INC  A
+  0477'   32 05EC'                      LD   (OutputOffset),A
+  047A'   FE 50                         CP   &80
+  047C'   38 15                         JR   C,PutByteDone	; Buffer not full yet
+  047E'   AF                    	XOR  A
+  047F'   32 05EC'                      LD   (OutputOffset),A
+  0482'                         PutByteSave:
+  0482'   ED 5B 05EF'           	LD   DE,(OutputBuffer)
+  0486'   0E 1A                 	LD   C,bd_setdma
+  0488'   CD 0005               	CALL bdos
+  048B'   11 005C               	LD   DE,FCB1
+  048E'   0E 15                 	LD   C,bd_write
+  0490'   CD 0005               	CALL bdos
+  0493'                         PutByteDone:
+  0493'   D1                    	POP  DE
+  0494'   E1                    	POP  HL
+  0495'   C9                    	RET
+                                
+  0496'   3E 0A                 CRLF:	LD   A,10
+  0498'   CD 049D'              	CALL PRCHAR
+	MACRO-80 3.44	09-Dec-81	PAGE	1-10
+
+
+  049B'   3E 0D                 	LD   A,13
+                                ;
+                                ; Output A, save all registers
+  049D'   C5                    PRCHAR:	PUSH BC
+  049E'   D5                    	PUSH DE
+  049F'   E5                    	PUSH HL
+  04A0'   5F                    	LD   E,A
+  04A1'   3A 05E9'              	LD   A,(Options)
+  04A4'   CB 67                 	BIT  4,A
+  04A6'   20 05                 	JR   NZ,PRDONE		; [Q]uiet
+  04A8'   0E 02                 	LD   C,bd_conout
+  04AA'   CD 0005               	CALL bdos
+  04AD'   E1                    PRDONE:	POP  HL
+  04AE'   D1                    	POP  DE
+  04AF'   C1                    	POP  BC
+  04B0'   C9                    	RET
+                                
+U 04B1'   00                    ShutInputFailed
+  04B2'   CD 0351'              	CALL ShutOutput
+  04B5'   11 05C9'              	LD   DE,MsgInputFailed
+  04B8'   18 2C                 	JR   MsgAbort
+U 04BA'   00                    ErrOutOfMem
+  04BB'   11 05A2'              	LD   DE,MsgOutOfMem
+  04BE'   18 26                 	JR   MsgAbort
+U 04C0'   00                    ShutTooManyFiles
+  04C1'   CD 0351'              	CALL ShutOutput
+  04C4'   11 05B2'              	LD   DE,MsgTooManyFiles
+  04C7'   18 1D                 	JR   MsgAbort
+U 04C9'   00                    ErrFileExists
+  04CA'   11 0571'              	LD   DE,MsgFileExists
+  04CD'   18 17                 	JR   MsgAbort
+U 04CF'   00                    ShutDirFull
+  04D0'   CD 0351'              	CALL ShutOutput
+U 04D3'   00                    ErrDirFull
+  04D4'   11 0596'              	LD   DE,MsgDirFull
+  04D7'   18 0D                 	JR   MsgAbort
+U 04D9'   00                    ShutDiskFull
+  04DA'   CD 0351'              	CALL ShutOutput
+U 04DD'   00                    ErrDiskFull
+  04DE'   11 058A'              	LD   DE,MsgDiskFull
+  04E1'   18 03                 	JR   MsgAbort
+  04E3'                         ZipSyntax:
+  04E3'   11 04EE'                      LD   DE,MsgSyntax
+  04E6'                         MsgAbort:
+  04E6'   0E 09                         LD   C,bd_string
+  04E8'   CD 0005                       CALL bdos
+  04EB'   C3 011A'                      JP   Exit
+                                
+                                ; Initialised data
+  04EE'                         MsgSyntax:
+  04EE'   5A 49 50 20           	DEFM "ZIP    v0.00 JGH 06-Nov-2000",10,13
+  04F2'   20 20 20 76           
+  04F6'   30 2E 30 30           
+  04FA'   20 4A 47 48           
+  04FE'   20 30 36 2D           
+  0502'   4E 6F 76 2D           
+	MACRO-80 3.44	09-Dec-81	PAGE	1-11
+
+
+  0506'   32 30 30 30           
+  050A'   0A 0D                 
+  050C'   55 73 61 67                   DEFM "Usage: ZIP <zipfile>[.zip] <afsp> [OQ]",10,13
+  0510'   65 3A 20 5A           
+  0514'   49 50 20 3C           
+  0518'   7A 69 70 66           
+  051C'   69 6C 65 3E           
+  0520'   5B 2E 7A 69           
+  0524'   70 5D 20 3C           
+  0528'   61 66 73 70           
+  052C'   3E 20 5B 4F           
+  0530'   51 5D 0A 0D           
+  0534'   45 67 3A 20                   DEFM "Eg: ZIP OUT.ZIP *.COM",10,13
+  0538'   5A 49 50 20           
+  053C'   4F 55 54 2E           
+  0540'   5A 49 50 20           
+  0544'   2A 2E 43 4F           
+  0548'   4D 0A 0D              
+  054B'   20 20 20 20                   DEFM "    ZIP ALLFILES.ZIP *.*",10,13,"$"
+  054F'   5A 49 50 20           
+  0553'   41 4C 4C 46           
+  0557'   49 4C 45 53           
+  055B'   2E 5A 49 50           
+  055F'   20 2A 2E 2A           
+  0563'   0A 0D 24              
+  0566'                         MsgAdding:
+  0566'   20 2D 2D 20           	DEFM " -- adding","$"
+  056A'   61 64 64 69           
+  056E'   6E 67 24              
+  0571'                         MsgFileExists:
+  0571'   5A 69 70 46           	DEFM "ZipFile already exists",10,13,"$"
+  0575'   69 6C 65 20           
+  0579'   61 6C 72 65           
+  057D'   61 64 79 20           
+  0581'   65 78 69 73           
+  0585'   74 73 0A 0D           
+  0589'   24                    
+  058A'                         MsgDiskFull:
+  058A'   44 69 73 6B           	DEFM "Disk full",10,13,"$"
+  058E'   20 66 75 6C           
+  0592'   6C 0A 0D 24           
+  0596'                         MsgDirFull:
+  0596'   44 69 72 2E           	DEFM "Dir. full",10,13,"$"
+  059A'   20 66 75 6C           
+  059E'   6C 0A 0D 24           
+  05A2'                         MsgOutOfMem:
+  05A2'   4F 75 74 20           	DEFM "Out of memory",10,13,"$"
+  05A6'   6F 66 20 6D           
+  05AA'   65 6D 6F 72           
+  05AE'   79 0A 0D 24           
+  05B2'                         MsgTooManyFiles:
+  05B2'   54 6F 6F 20           	DEFM "Too many input files",10,13,"$"
+  05B6'   6D 61 6E 79           
+  05BA'   20 69 6E 70           
+  05BE'   75 74 20 66           
+  05C2'   69 6C 65 73           
+	MACRO-80 3.44	09-Dec-81	PAGE	1-12
+
+
+  05C6'   0A 0D 24              
+  05C9'                         MsgInputFailed:
+  05C9'   0A 0D 43 6F           	DEFM 10,13,"Couldn't open input file",10,13,"$"
+  05CD'   75 6C 64 6E           
+  05D1'   27 74 20 6F           
+  05D5'   70 65 6E 20           
+  05D9'   69 6E 70 75           
+  05DD'   74 20 66 69           
+  05E1'   6C 65 0A 0D           
+  05E5'   24                    
+                                
+                                
+                                ; Uninitialised data
+  05E6'   0000                  OldStack:	DEFW &0000	; Also end of saved data
+  05E8'                         ZeroStart:			; Start of area to be zeroed
+  05E8'   00                    Pass:		DEFB &00	; 0=local list, 1=directory, 2=EOF
+  05E9'   00                    Options:	DEFB &00
+  05EA'   00                    NumFiles:	DEFB &00	; Number of entries
+                                ;FileOffset:	DS   4		; Offset to data segment entry
+  05EB'   00                    InputOffset:	DEFB &00	; Index into input buffer
+  05EC'   00                    OutputOffset:	DEFB &00	; Index into output buffer
+  05ED'   0000                  InputBuffer:	DEFW &0000	; Input buffer
+  05EF'   0000                  OutputBuffer:	DEFW &0000	; Output buffer
+  05F1'                         ZeroEnd:			; End of area to be zeroed on startup
+  05F1'                         FCB3:		DEFS 36		; Input file control block
+  0611'                         FCB3PTR		EQU  FCB3+32	; Input file pointer bytes
+U 0615'   01                    FCB1SaveOffset	DEFS 1		; Saved output offset
+U 0616'   05                    FCB1Saved	DEFS 5		; Saved output PTR
+U 0617'   04                    SavedPTR	DEFS 4		; Saved absolute PTR to output file
+                                
+                                ; Central directory overlaps local header
+  0618'                         Directory:
+  0618'                         DirSig:		DS	2	; Header signature PK,&01,&02
+  061C'                         DirMadeBy	EQU	DirSig+4; Version made by (&0000)
+                                ;
+                                ; Local header
+  061A'                         Header:
+  061A'                         HdrSig:		DS	4	; Header signature PK,&03,&04
+  061E'                         HdrVersion:	DS	2	; Version needed to extract (&0000)
+  0620'                         HdrFlags:	DS	2	; General purpose bit flag (&0000)
+  0622'                         HdrMethod:	DS	2	; Compression method
+  0624'                         HdrTime:	DS	2	; Modification time (&0000)
+  0626'                         HdrDate:	DS	2	; Modification date (&0000)
+  0628'                         HdrCRC:		DS	4	; 32-bit CRC
+  062C'                         HdrSize:	DS	4	; Compressed size
+  0630'                         HdrFSize:	DS	4	; Uncompressed size
+  0634'                         HdrNameSz:	DS	2	; Filename length
+  0636'                         HdrExtraSz:	DS	2	; Extra field length (&0000)
+  0638'                         HdrName:	DS	0	; Filename, overlapping next data
+                                ;
+                                ; Central directory also has:
+  0638'                         DirCommentSz:	DS	2	; Comment length (&0000)
+  063A'                         DirDisk:	DS	2	; Starting disk number (&0000)
+  063C'                         DirAttrsIn:	DS	2	; Internal file attributes (&0000)
+  063E'                         DirAttrsEx:	DS	4	; External file attributes (&0000)
+  0642'                         DirOffset:	DS	4	; Relative offset of local header
+	MACRO-80 3.44	09-Dec-81	PAGE	1-13
+
+
+  0646'                         DirName:	DS	12	; Filename, CP/M are max "12345678.123"
+  0652'                         HeaderEnd:
+                                ;
+                                ; EOF header:
+  061A'                         EOFSig		EQU	Header+0  ; Header signiture      4 bytes PK,&05,&06
+  061E'                         EOFDiskThis	EQU	Header+4  ; Number of this disk   2 bytes (&0000)
+  0620'                         EOFDiskStart	EQU	Header+6  ; Number of start disk  2 bytes (&0000)
+  0622'                         EOFFilesThis	EQU	Header+8  ; Number of entries     2 bytes (NumFiles)
+  0624'                         EOFFilesTotal	EQU	Header+10 ; Total num. entries    2 bytes (NumFiles)
+  0626'                         EOFDirSize	EQU	Header+12 ; Size of central dir   4 bytes (OffsetEOF-OffsetDir)
+  062A'                         EOFDirOffset	EQU	Header+16 ; Offset to central dir 4 bytes (OffsetDir)
+  062E'                         EOFCommentSz	EQU	Header+20 ; Comment length        2 bytes (&0000)
+  0630'                         EOFEnd		EQU	Header+22
+                                
+  0652'                         MemStore:
+                                ; This is a heap of all data used
+                                ; List of filenames read from source in 12-byte FCB format
+                                ; &FF terminator
+                                ; 128-byte output buffer
+                                ; 128-byte input buffer
+                                ; ...
+                                ; stack
+                                ; Top of memory at BDOS-&800
+                                
+	MACRO-80 3.44	09-Dec-81	PAGE	S
+
+
+Macros:
+
+Symbols:
+0000U	B8              0005 	BDOS            0010 	BD_CLOSE        
+0002 	BD_CONOUT       0013 	BD_DELETE       0023 	BD_GETSIZE      
+0016 	BD_MAKE         000F 	BD_OPEN         0014 	BD_READ         
+001A 	BD_SETDMA       0024 	BD_SETPTR       0011 	BD_SFIRST       
+0012 	BD_SNEXT        0009 	BD_STRING       0015 	BD_WRITE        
+0800 	CCPSIZE         034B'	CLOSEOUTPUT     0348'	CLOSEPAD        
+03D8'	CONVERTPTR      02C2'	COPYEOF         02A2'	COPYLOOP        
+03B0'	CRCCLEAR        0397'	CRCLP           0496'	CRLF            
+0000U	DEFS            017F'	DELETEOK        063E'	DIRATTRSEX      
+063C'	DIRATTRSIN      0638'	DIRCOMMENTSZ    063A'	DIRDISK         
+0618'	DIRECTORY       061C'	DIRMADEBY       0646'	DIRNAME         
+0642'	DIROFFSET       0618'	DIRSIG          0080 	DMA             
+0000U	ED              062E'	EOFCOMMENTSZ    062A'	EOFDIROFFSET    
+0626'	EOFDIRSIZE      0620'	EOFDISKSTART    061E'	EOFDISKTHIS     
+0630'	EOFEND          0622'	EOFFILESTHIS    0624'	EOFFILESTOTAL   
+061A'	EOFSIG          0000U	ERRDIRFULL      0000U	ERRDISKFULL     
+0000U	ERRFILEEXISTS   0000U	ERROUTOFMEM     011A'	EXIT            
+005C 	FCB1            007C 	FCB1PTR         0000U	FCB1SAVED       
+0000U	FCB1SAVEOFFSET  006C 	FCB2            05F1'	FCB3            
+0611'	FCB3PTR         0000U	FFAA            0000U	FFAD            
+0000U	FFE7            020C'	FILEDATA        021F'	FILEDATAGO      
+01DA'	FILELOOP        02DA'	FILESDONE       01D7'	FILESTART       
+0463'	FLUSHSAVE       0628'	HDRCRC          0626'	HDRDATE         
+0636'	HDREXTRASZ      0620'	HDRFLAGS        0630'	HDRFSIZE        
+0622'	HDRMETHOD       0638'	HDRNAME         0634'	HDRNAMESZ       
+061A'	HDRSIG          062C'	HDRSIZE         0624'	HDRTIME         
+061E'	HDRVERSION      061A'	HEADER          0652'	HEADEREND       
+05ED'	INPUTBUFFER     05EB'	INPUTOFFSET     0652'	MEMSTORE        
+04E6'	MSGABORT        0566'	MSGADDING       0596'	MSGDIRFULL      
+058A'	MSGDISKFULL     0571'	MSGFILEEXISTS   05C9'	MSGINPUTFAILED  
+05A2'	MSGOUTOFMEM     04EE'	MSGSYNTAX       05B2'	MSGTOOMANYFILES 
+0249'	NAMEDONE        023C'	NAMEDOT         000C 	NAMELEN         
+0225'	NAMELOOP        0242'	NAMEPUT         05EA'	NUMFILES        
+05E6'	OLDSTACK        016F'	OPTDONE         05E9'	OPTIONS         
+013F'	OPTLP1          014E'	OPTLP3          0158'	OPTS            
+0000U	OSNEWL          05EF'	OUTPUTBUFFER    05EC'	OUTPUTOFFSET    
+05E8'	PASS            0000U	PR1HEX          0000U	PR2HEX          
+049D'	PRCHAR          04AD'	PRDONE          0468'	PUTBYTE         
+0493'	PUTBYTEDONE     0482'	PUTBYTESAVE     0467'	PUTZERO         
+040D'	RESTOREPTR      035E'	SAVECRC         0382'	SAVEDATA        
+03C0'	SAVEDATA0       03C3'	SAVEDATA2       03C6'	SAVEDATA3       
+038C'	SAVEDATAGO      038D'	SAVEDATALP      0000U	SAVEDPTR        
+037C'	SAVEEOF         0359'	SAVEHEADER      03F6'	SAVEPTR         
+01B1'	SCANDONE        0184'	SCANLOOP        0000U	SHUTDIRFULL     
+0000U	SHUTDISKFULL    0000U	SHUTINPUTFAILED 0351'	SHUTOUTPUT      
+0000U	SHUTTOOMANYFILES 010B'	START           011F'	START0          
+0064 	VERS            0006 	VERSDD          000B 	VERSMM          
+07D0 	VERSYY          0109'	Z3EADR          05F1'	ZEROEND         
+05E8'	ZEROSTART       04E3'	ZIPSYNTAX       
+
+
+
+42 Fatal error(s)
+
+

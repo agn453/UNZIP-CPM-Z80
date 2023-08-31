@@ -33,7 +33,7 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
-### August 27. 2023
+### August 31. 2023
 
 The CP/M version V1.5-6 has been modified by Jonathon Harston to -
 
@@ -52,6 +52,11 @@ year for file datestamps, and the CRC as a 32-bit number.  This new
 version 1.5 is available from
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir15.lbr
+
+Jonathon Harston's sourcecode for a CP/M ZIP utility has also been
+added as ZIP100.Z80.  Currently this can be built using the ZMAC 
+assembler (and not by Microsoft M80 or Hector Peraza's ZSM4 macro
+assemblers).  This will be remedied in a future commit.
 
 
 ### September 19, 2021

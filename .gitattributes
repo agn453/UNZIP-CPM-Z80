@@ -10,6 +10,7 @@ README.md text eol=crlf
 *.LBR binary
 *.for text eof=crlf linguist-language=Assembly
 *.FOR text eof=crlf linguist-language=Assembly
+*.prn text eof=crlf
 *.toc text eof=crlf
 *.TXT text eof=crlf
 *.SLR text eof=crlf
