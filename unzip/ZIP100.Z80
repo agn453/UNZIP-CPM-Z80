@@ -36,9 +36,9 @@ bd_setdma	equ	26
 bd_getsize	equ	35
 bd_setptr	equ	36
 ;
-PR1HEX		equ	&FFAA
-PR2HEX		equ	&FFAD
-OSNEWL		equ	&FFE7
+PR1HEX		equ	0FFAAh
+PR2HEX		equ	0FFADh
+OSNEWL		equ	0FFE7h
 
 	org   100h
 	jp    Start
@@ -141,7 +141,7 @@ ScanLoop:
         LD   (HL),A		; Put into file list
 	LD   BC,NAMELEN		; DRIVE+FILENAME+EXT
 	LDIR			; Copy name to heap
-	LD   HL,-&180		; 128buffer+128buffer+128stack
+	LD   HL,-0180h		; 128buffer+128buffer+128stack
 	ADD  HL,SP		; HL=SP-&180
 	SBC  HL,DE		; HL=SP-&180-heaptop
 	JP   C,ErrOutOfMem
@@ -191,13 +191,13 @@ FileLoop:
 	AND  A
 	JR   Z,FileData		; Pass=0, data segment
 	LD   (DirSig+0),HL	; Directory signiture
-	LD   HL,&0201
+	LD   HL,0201h
 	LD   (DirSig+2),HL
 	LD   HL,DirName		; HL=>name store in header
 	JR   FileDataGo
 FileData:
 	LD   (HdrSig+0),HL
-	LD   HL,&0403		; Put data signiture in
+	LD   HL,0403h		; Put data signiture in
 	LD   (HdrSig+2),HL
 	LD   HL,NumFiles
 	INC  (HL)
@@ -318,7 +318,7 @@ FilesDone:
 ; Create EOF header
 	LD   HL,'PK'		; Put signiture in
 	LD   (EOFSig+0),HL
-	LD   HL,&0605
+	LD   HL,0605h
 	LD   (EOFSig+2),HL
 	LD   HL,0
 	LD   (EOFDiskThis),HL
@@ -414,16 +414,16 @@ CRClp:	SRL  H			; Rotate CRC
 	JR   NC,CRCclear	; b0 was zero
 	LD   E,A		; Put CRC low byte back into E
 	LD   A,H
-	XOR  &ED		; CRC=CRC XOR &EDB88320, ZIP polynomic
+	XOR  0EDh		; CRC=CRC XOR &EDB88320, ZIP polynomic
 	LD   H,A
 	LD   A,L
-	XOR  &B8
+	XOR  0B8h
 	LD   L,A
 	LD   A,D
-	XOR  &83
+	XOR  083h
 	LD   D,A
 	LD   A,E
-	XOR  &20		; And get CRC low byte back into A
+	XOR  020h		; And get CRC low byte back into A
 CRCclear:
 	DJNZ CRClp		; Loop for 8 bits
 	LD   E,A		; Put CRC low byte back into E
@@ -539,7 +539,7 @@ PutByte:
 	LD   A,E
 	INC  A
         LD   (OutputOffset),A
-        CP   &80
+        CP   080h
         JR   C,PutByteDone	; Buffer not full yet
 	XOR  A
         LD   (OutputOffset),A
@@ -574,28 +574,28 @@ PRDONE:	POP  HL
 	POP  BC
 	RET
 
-ShutInputFailed
+ShutInputFailed:
 	CALL ShutOutput
 	LD   DE,MsgInputFailed
 	JR   MsgAbort
-ErrOutOfMem
+ErrOutOfMem:
 	LD   DE,MsgOutOfMem
 	JR   MsgAbort
-ShutTooManyFiles
+ShutTooManyFiles:
 	CALL ShutOutput
 	LD   DE,MsgTooManyFiles
 	JR   MsgAbort
-ErrFileExists
+ErrFileExists:
 	LD   DE,MsgFileExists
 	JR   MsgAbort
-ShutDirFull
+ShutDirFull:
 	CALL ShutOutput
-ErrDirFull
+ErrDirFull:
 	LD   DE,MsgDirFull
 	JR   MsgAbort
-ShutDiskFull
+ShutDiskFull:
 	CALL ShutOutput
-ErrDiskFull
+ErrDiskFull:
 	LD   DE,MsgDiskFull
 	JR   MsgAbort
 ZipSyntax:
@@ -637,16 +637,16 @@ MsgInputFailed:
 
 
 ; Uninitialised data
-OldStack:	DEFW &0000	; Also end of saved data
+OldStack:	DEFW 0000h	; Also end of saved data
 ZeroStart:			; Start of area to be zeroed
-Pass:		DEFB &00	; 0=local list, 1=directory, 2=EOF
-Options:	DEFB &00
-NumFiles:	DEFB &00	; Number of entries
+Pass:		DEFB 0		; 0=local list, 1=directory, 2=EOF
+Options:	DEFB 0
+NumFiles:	DEFB 0		; Number of entries
 ;FileOffset:	DS   4		; Offset to data segment entry
-InputOffset:	DEFB &00	; Index into input buffer
-OutputOffset:	DEFB &00	; Index into output buffer
-InputBuffer:	DEFW &0000	; Input buffer
-OutputBuffer:	DEFW &0000	; Output buffer
+InputOffset:	DEFB 0		; Index into input buffer
+OutputOffset:	DEFB 0		; Index into output buffer
+InputBuffer:	DEFW 0000h	; Input buffer
+OutputBuffer:	DEFW 0000h	; Output buffer
 ZeroEnd:			; End of area to be zeroed on startup
 FCB3:		DEFS 36		; Input file control block
 FCB3PTR		EQU  FCB3+32	; Input file pointer bytes

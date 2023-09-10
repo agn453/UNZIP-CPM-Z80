@@ -383,7 +383,8 @@ endif
 ;
 ; pcfh - skip past central directory
 ;
-if FASTQUIT=0
+if FASTQUIT
+else
 pcfh:	ld	b,12		; skip ahead to filename length entry
 pcfhl1:	push	bc
 	call	getword
@@ -415,7 +416,8 @@ endif
 ;
 ; pecd - skip past end-of-central-directory
 ;
-if FASTQUIT=0
+if FASTQUIT
+else
 pecd:	ld	b,8		; skip ahead to comment length
 pecdl:	push	bc
 	call	getword
@@ -2672,7 +2674,7 @@ crc32tab:	; crc32_tab[] from degzip_portable.c, takes 1k
 ;
 ; uninitialized storage
 ;
-oldstk:	ds	2
+oldstk:	ds	2		; also end of initialised data
 inusr:	ds	1
 outusr:	ds	1
 mode:	ds	1
