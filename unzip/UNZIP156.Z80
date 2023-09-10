@@ -383,7 +383,7 @@ endif
 ;
 ; pcfh - skip past central directory
 ;
-if FASTQUIT eq 0
+if FASTQUIT=0
 pcfh:	ld	b,12		; skip ahead to filename length entry
 pcfhl1:	push	bc
 	call	getword
@@ -415,7 +415,7 @@ endif
 ;
 ; pecd - skip past end-of-central-directory
 ;
-if FASTQUIT eq 0
+if FASTQUIT=0
 pecd:	ld	b,8		; skip ahead to comment length
 pecdl:	push	bc
 	call	getword
@@ -2417,18 +2417,17 @@ setbth:	ld	e,a
 ; usage -- show syntax for ZCPR3 ("dir:") or vanilla CP/M ("d:")
 ;
 usage:	call	ilprt0
-	db	'UNZIP  v'
-	db	Vers/10+'0','.',Vers mod 10+'0'
-	db	Revisn mod 10+'0'	;;v1.5-1 identify revision
-	DB	' - JGH '
-	DB	(VersDD/10)+'0',(VersDD mod 10)+'0'
-	DB	'/'
-	DB	(VersMM/10)+'0',(VersMM mod 10)+'0'
-	DB	'/'
-	DB	(VersYY/1000)+'0',((VersYY/100) mod 10)+'0'
-	DB	((VersYY/10) mod 10)+'0',(VersYY mod 10)+'0'
-	db	CR,LF,'Usage: '
-	db	'UNZIP {d',0
+	DB 'UNZIP  v'
+	DB Vers/10+'0','.',Vers mod 10+'0'
+	DB Revisn mod 10+'0',' - JGH '
+        DB '0'+(VersDD / 10),'0'+(VersDD MOD 10),'-'
+        DB 74-4*(VersMM=2)+3*(VersMM=3 | VersMM=5)-9*(VersMM=4 | VersMM=8)+9*(VersMM=9)+5*(VersMM=10)+4*(VersMM=11)-6*(VersMM=12)
+        DB 97+4*(VersMM=2 | VersMM=9 | VersMM=12)+15*(VersMM=4)+20*(VersMM=6 | VersMM=7 | VersMM=8)+2*(VersMM=10)+14*(VersMM=11)
+        DB 110-12*(VersMM=2)+4*(VersMM=3 | VersMM=4)+11*(VersMM=5)-2*(VersMM=7)-7*(VersMM=8)+2*(VersMM=9)+6*(VersMM=10)+8*(VersMM=11)-11*(VersMM=12)
+	DB "-",'0'+((VersYY / 1000) MOD 10),'0'+((VersYY / 100) MOD 10)
+	DB '0'+((VersYY / 10) MOD 10),'0'+(VersYY MOD 10)
+	DB CR,LF,'Usage: '
+	DB 'UNZIP {d',0
 	ld	hl,(Z3EAdr)
 	ld	a,h
 	or	l

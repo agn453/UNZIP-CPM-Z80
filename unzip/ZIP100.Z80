@@ -607,7 +607,16 @@ MsgAbort:
 
 ; Initialised data
 MsgSyntax:
-	DEFM "ZIP    v0.00 JGH 06-Nov-2000",10,13
+	DEFM "ZIP    v"
+	DEFB '0'+((Vers / 100) MOD 10),'.'
+	DEFB '0'+((Vers / 10) MOD 10),'0'+(Vers MOD 10)," - JGH "
+        DEFB '0'+(VersDD / 10),'0'+(VersDD MOD 10),'-'
+        DEFB 74-4*(VersMM=2)+3*(VersMM=3 | VersMM=5)-9*(VersMM=4 | VersMM=8)+9*(VersMM=9)+5*(VersMM=10)+4*(VersMM=11)-6*(VersMM=12)
+        DEFB 97+4*(VersMM=2 | VersMM=9 | VersMM=12)+15*(VersMM=4)+20*(VersMM=6 | VersMM=7 | VersMM=8)+2*(VersMM=10)+14*(VersMM=11)
+        DEFB 110-12*(VersMM=2)+4*(VersMM=3 | VersMM=4)+11*(VersMM=5)-2*(VersMM=7)-7*(VersMM=8)+2*(VersMM=9)+6*(VersMM=10)+8*(VersMM=11)-11*(VersMM=12)
+	DEFB "-",'0'+((VersYY / 1000) MOD 10),'0'+((VersYY / 100) MOD 10)
+	DEFB '0'+((VersYY / 10) MOD 10),'0'+(VersYY MOD 10)
+	DEFM 10,13
         DEFM "Usage: ZIP <zipfile>[.zip] <afsp> [OQ]",10,13
         DEFM "Eg: ZIP OUT.ZIP *.COM",10,13
         DEFM "    ZIP ALLFILES.ZIP *.*",10,13,"$"
