@@ -1,0 +1,50 @@
+	.xlist		; Suppress listing of this MACLIB
+
+; convert day, month, year to date string in dd-mmm-yyyy format
+datestr	macro	?dd,?mm,?yyyy
+	defb	'0'+(?dd / 10),'0'+(?dd mod 10),'-'
+	if (?mm lt 1) or (?mm gt 12)
+	  defb	'xxx'
+	else
+	  if ?mm eq 1
+	    defb	'Jan'
+	  endif
+	  if ?mm eq 2
+	    defb	'Feb'
+	  endif
+	  if ?mm eq 3
+	    defb	'Mar'
+	  endif
+	  if ?mm eq 4
+	    defb	'Apr'
+	  endif
+	  if ?mm eq 5
+	    defb	'May'
+	  endif
+	  if ?mm eq 6
+	    defb	'Jun'
+	  endif
+	  if ?mm eq 7
+	    defb	'Jul'
+	  endif
+	  if ?mm eq 8
+	    defb	'Aug'
+	  endif
+	  if ?mm eq 9
+	    defb	'Sep'
+	  endif
+	  if ?mm eq 10
+	    defb	'Oct'
+	  endif
+	  if ?mm eq 11
+	    defb	'Nov'
+	  endif
+	  if ?mm eq 12
+	    defb	'Dec'
+	  endif
+	endif
+	defb	'-','0'+((?yyyy / 1000) mod 10),'0'+((?yyyy / 100) mod 10)
+	defb	'0'+((?yyyy / 10) mod 10),'0'+(?yyyy mod 10)
+	endm
+
+	.list

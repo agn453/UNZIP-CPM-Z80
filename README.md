@@ -33,6 +33,15 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### October 13, 2023
+
+Minor updates to Jonathon Harston's UNZIP V1.5-6 and the CP/M ZIP
+v1.00 program to include the date in the usage output (when you run
+the programs with no parameters).  I've also modified the sources
+so that they can be built using the Microsoft Macro-80 and Hector
+Peraza's ZSM4 Macro Assemblers.
+
+
 ### August 31. 2023
 
 The CP/M version V1.5-6 has been modified by Jonathon Harston to -
@@ -56,7 +65,9 @@ https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir15.lbr
 Jonathon Harston's sourcecode for a CP/M ZIP utility has also been
 added as ZIP100.Z80.  Currently this can be built using the ZMAC 
 assembler (and not by Microsoft M80 or Hector Peraza's ZSM4 macro
-assemblers).  This will be remedied in a future commit.
+assemblers).
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zip100.lbr
 
 
 ### September 19, 2021
