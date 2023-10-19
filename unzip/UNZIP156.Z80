@@ -1651,10 +1651,10 @@ gt4:	add	hl,hl
 gt3:	ex	de,hl
 gt2:	ld	(iy + _code),l
 	ld	(iy + _code + 1),h
-	push	de
-	ld	de,-4
-	add	iy,de
-	pop	de
+	dec iy
+	dec iy
+	dec iy
+	dec iy
 	jr	gt1
 ;
 ldtrees:
@@ -1745,10 +1745,10 @@ rt2:	pop	bc
 rt4:	ld	a,(iy + _bitlength)
 	cp	b
 	jr	nc,rt5
-	push	de
-	ld	de,4
-	add	iy,de
-	pop	de
+	inc iy
+	inc iy
+	inc iy
+	inc iy
 	inc	hl
 	ld	a,(ix + _entries)
 	sub	l
@@ -1771,10 +1771,10 @@ rt5:	ld	a,(iy + _bitlength)
 	ld	a,(iy + _value)
 	ret
 ;
-rt7:	push	de
-	ld	de,4
-	add	iy,de
-	pop	de
+rt7:	inc iy
+	inc iy
+	inc iy
+	inc iy
 	inc	hl
 	ld	a,(ix + _entries)
 	sub	l
@@ -2198,10 +2198,8 @@ hmcn3:	ld	a,b
 	ld	(inbufp),hl
 	ld	a,(rdpts)
 	ld	(readpt),a
-	ld	a,(blfts)
-	ld	(bleft),a
-	ld	a,(bitbs)
-	ld	(bitbuf),a
+	ld	hl,(bitbs)	; H=bleft=blfts, L=bitbuf=bitbs
+	ld	(bitbuf),hl
 	ld	hl,counting
 	inc	(hl)
 
@@ -2318,10 +2316,8 @@ udnt0:	dec	a
 	ld	(inbps),hl
 	ld	a,(readpt)
 	ld	(rdpts),a
-	ld	a,(bleft)
-	ld	(blfts),a
-	ld	a,(bitbuf)
-	ld	(bitbs),a
+	ld	hl,(bitbuf)	; H=bleft=blfts, L=bitbuf=bitbs
+	ld	(bitbs),hl
 	ld	hl,counting
 	dec	(hl)
 	ld	hl,static_pre
