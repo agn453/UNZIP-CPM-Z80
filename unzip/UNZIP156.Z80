@@ -651,7 +651,18 @@ badskp:	ld	a,(zipeof)
 	jr	nz,closeo
 	call	getbyte
 	jr	badskp
-;	ret
+
+;
+open_wr:
+	ld	de,opbuf
+	ld	c,setdma
+	call	bdos
+	call	setout
+	ld	de,opfcb
+	ld	c,fwrite
+	call	bdos
+	ret
+
 ;
 closeo:	ld	hl,zipeof
 	dec	(hl)
@@ -665,13 +676,7 @@ closeo:	ld	hl,zipeof
 	ld	a,(hl)
 	or	a
 	jr	z,noflsh
-	ld	de,opbuf
-	ld	c,setdma
-	call	bdos
-	call	setout
-	ld	de,opfcb
-	ld	c,fwrite
-	call	bdos
+	call	open_wr
 noflsh:	call	setout
 	ld	de,opfcb
 	ld	c,fclose
@@ -715,7 +720,8 @@ wild2:	ld	hl,mtchfcb
 	ret
 ;
 getchla:
-	call	getcode
+	ld	a,(codesize)
+	call	readbits
 	ld	(code),hl
 	ld	a,(zipeof)
 	and	1
@@ -727,8 +733,9 @@ savstk:	ld	hl,(stackp)
 	ld	(hl),a
 	ret
 ;
-getcode:
-	ld	a,(codesize)
+rd16bits:
+	ld	a,16
+
 readbits:
 	ld	b,a
 	ld	c,80h		; bits rotate into C and A
@@ -761,6 +768,9 @@ bitret:	ld	(bitbuf),hl	; update bitbuf/bleft
 ; (No caller seems to require saving BC, so I removed that for both
 ; this and readbits.)
 ;
+rdbyte:
+	ld	a,8
+
 rdbybits:
 	ld	(rdbyop+1),a	; modify jr instruction at rdbyop
 	ld	b,a
@@ -1000,13 +1010,7 @@ noeof1:	ld	hl,wrtpt
 	ld	a,(hl)
 	add	a,a
 	jr	nc,wptok
-	ld	de,opbuf
-	ld	c,setdma
-	call	bdos
-	call	setout
-	ld	de,opfcb
-	ld	c,fwrite
-	call	bdos
+	call	open_wr
 	or	a
 	jr	z,wptok
 	call	ilprt
@@ -1295,6 +1299,12 @@ l11:	ld	hl,maxcmax
 	jr	l11
 br11:	ld	(free_ent),de
 	ret
+
+; End of SHRINK related section
+
+; -------------------------
+; REDUCE Method
+; -------------------------
 ;
 loadfollowers:
 	ld	hl,Slen + 255
@@ -1316,8 +1326,7 @@ lflp:	push	bc
 	jr	z,nofoll
 ldfllp:	push	hl
 	push	bc
-	ld	a,8
-	call	rdbybits
+	call	rdbyte
 	pop	bc
 	pop	hl
 	ld	(hl),a
@@ -1352,8 +1361,7 @@ ur1:	ld	a,(zipeof)
 	call	slenlch
 	or	a
 	jr	nz,ur2
-ur4:	ld	a,8
-	call	rdbybits
+ur4:	call	rdbyte
 	jr	ur3
 ;
 ur2:	rd1bit
@@ -1455,6 +1463,10 @@ shftadd:
 	rr	e
 	add	hl,de
 	ret
+
+; --- End of REDUCE decompression section ---
+
+
 ;
 callback:
 	push	bc
@@ -1507,8 +1519,7 @@ outbp:	push	hl
 	ret
 ;
 readlengths:
-	ld	a,8
-	call	rdbybits
+	call	rdbyte
 	ld	d,h
 	ld	e,d
 	inc	hl
@@ -1802,8 +1813,7 @@ ui1:	ld	a,(zipeof)
 	call	readtree
 	jr	ui4
 ;
-ui3:	ld	a,8
-	call	rdbybits
+ui3:	call	rdbyte
 ui4:	call	outb
 	jr	ui1
 ;
@@ -1827,8 +1837,7 @@ ui5:	add	hl,hl
 	cp	63
 	jr	nz,ui6
 	push	hl
-	ld	a,8
-	call	rdbybits
+	call	rdbyte
 	pop	de
 	add	hl,de
 ui6:	ld	de,(mml)
@@ -2198,10 +2207,8 @@ hmcn3:	ld	a,b
 	ld	(inbufp),hl
 	ld	a,(rdpts)
 	ld	(readpt),a
-	ld	a,(blfts)
-	ld	(bleft),a
-	ld	a,(bitbs)
-	ld	(bitbuf),a
+	ld	hl,(bitbs)	; H=bleft=blfts, L=bitbuf=bitbs
+	ld	(bitbuf),hl
 	ld	hl,counting
 	inc	(hl)
 
@@ -2289,11 +2296,9 @@ udloop:	ld	a,(zipeof)
 
 	xor	a
 	ld	(bleft),a
-	ld	a,16
-	call	readbits
+	call	rd16bits
 	push	hl
-	ld	a,16
-	call	readbits
+	call	rd16bits
 	pop	bc
 	scf
 	adc	hl,bc
@@ -2318,10 +2323,8 @@ udnt0:	dec	a
 	ld	(inbps),hl
 	ld	a,(readpt)
 	ld	(rdpts),a
-	ld	a,(bleft)
-	ld	(blfts),a
-	ld	a,(bitbuf)
-	ld	(bitbs),a
+	ld	hl,(bitbuf)	; H=bleft=blfts, L=bitbuf=bitbs
+	ld	(bitbs),hl
 	ld	hl,counting
 	dec	(hl)
 	ld	hl,static_pre
@@ -2774,12 +2777,18 @@ ncode:	ds	2 * maxcl + 2
 hlit:	ds	2
 hdist:	ds	1
 inbps:	ds	2
+
+; Keep bitbs and blfts wrapped together
+; so we can pick them up with a single 16bit register
 rdpts:	ds	1
 bitbs:	ds	1
+
 blfts:	ds	1
+
+; ---  used by the SHRINK method only ---
 oldcode:
 	ds	2
-offset:	ds	2
+offset:	ds	2	; This variable is probably not necessary
 codesize:
 	ds	1
 maxcode:
@@ -2788,6 +2797,8 @@ free_ent:
 	ds	2
 finchar:
 	ds	1
+; --- --- --- --- --- --- --- --- --- ---
+
 stackp:	ds	2
 incode:	ds	2
 code:	ds	2
