@@ -9,11 +9,14 @@ FASTQUIT  equ	1	; Quit as soon as end of data section
 CCPQUIT   equ   1	; Returns to CCP instead of WARM
 
 Vers	equ	15
-Revisn	equ	6		;;v1.5-6
-VersDD	equ	27
-VersMM	equ	08
+Revisn	equ	7		;;v1.5-7
+VersDD	equ	22
+VersMM	equ	10
 VersYY	equ	2023
 
+;
+; Version 1.5-7 -- 22 October 2023 -- Stefano and Tony Nicholson
+;	Some code size optimisations.
 ;
 ; Version 1.56 -- 27 August 2023 -- Jonathan Harston
 ;	Junks file paths when extracting.
@@ -660,8 +663,7 @@ open_wr:
 	call	setout
 	ld	de,opfcb
 	ld	c,fwrite
-	call	bdos
-	ret
+	jp	bdos
 
 ;
 closeo:	ld	hl,zipeof
@@ -2423,7 +2425,7 @@ setbth:	ld	e,a
 usage:	call	ilprt0
 	DB 'UNZIP  v'
 	DB Vers/10+'0','.',Vers mod 10+'0'
-	DB Revisn mod 10+'0',' - JGH '
+	DB '-',Revisn mod 10+'0',' '
 ; convert VersDD, VersMM, VersYY to date string in dd-mmm-yyyy format
 	defb	'0'+(VersDD / 10),'0'+(VersDD mod 10),'-'
 	if (VersMM lt 1) or (VersMM gt 12)

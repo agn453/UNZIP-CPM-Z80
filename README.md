@@ -4,10 +4,10 @@ This is UNZIP for CP/M in Zilog Z80 assembler.
 
 **LATEST NEWS:**  CP/M version enhancements.
 
-The latest release is V1.5-6 (CP/M) or V1.8-7 (Z-system) and may be
+The latest release is V1.5-7 (CP/M) or V1.8-7 (Z-system) and may be
 downloaded in CP/M library file format from -
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip156.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip157.lbr
 
 or
 
@@ -32,6 +32,13 @@ MS-DOS Version 1.x.)
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### October 22, 2023
+
+Stefano has contributed some code optimisations to the CP/M UNZIP program.
+I've bumped the version number to v1.5-7.  If you notice any issues with
+this version, please report them.
+
 
 ### October 13, 2023
 
@@ -63,9 +70,7 @@ version 1.5 is available from
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir15.lbr
 
 Jonathon Harston's sourcecode for a CP/M ZIP utility has also been
-added as ZIP100.Z80.  Currently this can be built using the ZMAC 
-assembler (and not by Microsoft M80 or Hector Peraza's ZSM4 macro
-assemblers).
+added as ZIP100.Z80.
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zip100.lbr
 
