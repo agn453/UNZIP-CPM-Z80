@@ -417,13 +417,9 @@ are _not fixed_.
 
 --
 
-[^1]: The source-code, documentation and executable for the
-ZSM4 Z80/Z180/Z280 Macro Assembler may be obtained from
-https://github.com/hperaza/ZSM4
+[^1]: The source-code, documentation and executable for the ZSM4 Z80/Z180/Z280 Macro Assembler may be obtained from
+  https://github.com/hperaza/ZSM4
 
-[^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler
-and Linker for Zsystem program development.  You can download a ZIP
-file distribution of it from
-
-http://www.cpm.z80.de/develop/zmac.zip
+[^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler and Linker for Zsystem program development.  You can download a ZIP file distribution of it from
+  http://www.cpm.z80.de/develop/zmac.zip
 
