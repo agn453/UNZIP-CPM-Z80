@@ -33,6 +33,52 @@ MS-DOS Version 1.x.)
 
 In reverse chronological order.
 
+### December 28, 2023
+
+Lars Nelson has provided the following updates to Jonathon Harston's
+CP/M ZIP file creation utility -
+
+* Fixed a problem where the computed CRC for some but not all files was
+not being written into the Local File Header especially on CP/M 2.2 and
+compatible systems. This caused a problem for CP/M unzip programs since
+they use the information in the Local File Header to extract files.
+Lack of a valid CRC causes the unzip programs to skip the file.  Note,
+the central directory was correct so on PCs or Macs all files could be
+extracted.
+
+* Added the ability to get file modification date from CP/M Plus and
+CP/M 2.2 using routines from the Zsystem libraries DSLIB and ZSLIB.
+This necessitated making the code relocatable.
+
+The updated version is ZIP101.  You can download the full distribution
+from the CP/M library file from
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zip101.lbr
+
+Or just the binary from 
+[ZIP101.COM](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZIP101.COM)
+and the updated source file from
+[ZIP101.Z80](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/ZIP101.Z80).
+
+To rebuild from source you can use Alex Hawley's ZMAC & ZML[^2] (as opposed to
+some other assembler named ZMAC) or Hector Peraza's ZSM4[^1] and standard
+Digital Research CP/M 3 linker LINK.  The libraries DSLIB.REL, ZSLIB.REL and
+SYSLIB.REL are required to be in the default directory (or modify the
+sourcecode to explicitlyspecify their location).
+
+```
+zmac zip101
+zml zip101
+```
+
+or
+
+```
+zsm4 =zip101.zip
+link zip101
+```
+
+
 ### October 22, 2023
 
 Stefano has contributed some code optimisations to the CP/M UNZIP program.
@@ -304,7 +350,7 @@ postings at the Google Groups archive of the comp.os.cpm newsgroup -
 * Un-implode fix https://groups.google.com/forum/#!topic/comp.os.cpm/rpjA1Q6RtDc
 
 The new Z80 CP/M executable has been built using Hector Peraza's ZSM4
-assembler(1) and Digital Research's LINK as *UNZIP151.COM* using the
+assembler[^1] and Digital Research's LINK as *UNZIP151.COM* using the
 following commands -
 
 ```
@@ -371,6 +417,13 @@ are _not fixed_.
 
 --
 
-(1) The source-code, documentation and executable for the
+[^1]: The source-code, documentation and executable for the
 ZSM4 Z80/Z180/Z280 Macro Assembler may be obtained from
 https://github.com/hperaza/ZSM4
+
+[^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler
+and Linker for Zsystem program development.  You can download a ZIP
+file distribution of it from
+
+http://www.cpm.z80.de/develop/zmac.zip
+
