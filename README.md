@@ -64,7 +64,7 @@ To rebuild from source you can use Alex Hawley's ZMAC & ZML[^2] (as opposed to
 some other assembler named ZMAC) or Hector Peraza's ZSM4[^1] and standard
 Digital Research CP/M 3 linker LINK.  The libraries DSLIB.REL, ZSLIB.REL and
 SYSLIB.REL are required to be in the default directory (or modify the
-sourcecode to explicitlyspecify their location).
+sourcecode to explicitly specify their location).
 
 ```
 zmac zip101
@@ -204,7 +204,7 @@ Once again, I've updated the source and library file (still at v1.8-4)
 so fetch a new copy if you've an older version.
 
 Also a later Z-System version of ZIPDIR has been added.  Download from
-[ZIPDIR14](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir14.lbr)
+[ZIPDIR14.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir14.lbr)
 
 
 ### November 4, 2020
@@ -212,7 +212,7 @@ Also a later Z-System version of ZIPDIR has been added.  Download from
 Lars has fixed the "zero-length file CRC error" for the Z-system v1.8-4
 version.  Updated UNZIP184.Z80, the binary and library for this version only.
 Also included an updated version of
-[ZIPDIR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir.lbr)
+[ZIPDIR.LBR](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zipdir.lbr)
 to correctly report .ZIP file entries compressed with the Deflate method.
 
 
@@ -422,4 +422,3 @@ are _not fixed_.
 
 [^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler and Linker for Zsystem program development.  You can download a ZIP file distribution of it from
   http://www.cpm.z80.de/develop/zmac.zip
-
