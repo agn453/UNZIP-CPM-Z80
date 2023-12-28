@@ -3,16 +3,51 @@
 ; Create ZIP archives for CPM
 ; J.G.Harston 06-Nov-2000
 ;
-; 31-Aug-2023	Rewritten for ZMac
-; Can be assembled with ZMAC with:
+; Vers 100 -- 31-Aug-2023 -- J.G.Harston
+;	Rewritten for ZMac.  Can be assembled with ZMAC with:
+;
 ;	ZMAC -o ZIP.COM ZIP100.Z80
 ;
-; To do: add support for CPM3 datestamps, add DU: support.
+; Vers 101 -- 08-Dec-2023 -- Lars Nelson
+;	Fixed a problem where the computed CRC for some but
+;	not all files was not being written into the Local 
+;	File Header especially on CP/M 2.2 and compatible
+;	systems.  This caused a problem for CP/M unzip 
+;	programs because they use the information in the 
+;	Local File Header to extract files.  Lack of a valid
+;	CRC causes the unzip programs to skip the file.  
+;	Note, central directory was correct so on PCs or
+;	Macs all files could be extracted.  nAdded 
+;	ability to get file modification date from CP/M Plus
+;	and CP/M 2.2 using routines from DSLIB and ZSLIB.  This
+;	necessitated making the code relocatable.
 ;
-Vers		equ	100
-VersDD		equ	06
-VersMM		equ	11
-VersYY		equ	2000
+; To do: add DU: support.  Add ability to add file to a zip
+;	file.
+;
+; Production:
+; File is now best assembled and linked with Alex Hawley's ZMAC
+; & ZML as opposed to some other assembler named ZMAC.  Set SLR
+; true below.  Libraries DSLIB.REL, ZSLIB.REL & SYSLIB.REL are
+; required to be in the default directory
+;
+;	zmac zip101
+;	zml zip101
+;
+; Z80ASM & SLRNK can also be used.  If want to use SLR .REL
+; files instead of Microsoft .REL files, add an 'S' to the end
+; of the library names, i.e. use DSLIBS.REL, ZSLIBSREL &
+; SYSLIBS.REL.
+;
+Vers		equ	101
+VersDD		equ	08
+VersMM		equ	12
+VersYY		equ	2023
+;
+false		equ	0
+true		equ	not false
+;
+SLR		equ	true		; set true if using SLR assembler
 ;
 bdos		equ	0005h
 FCB1		equ	005Ch
@@ -21,6 +56,7 @@ FCB1PTR		equ	FCB1+32	; Output pointer bytes
 DMA		equ	0080h
 CCPSIZE		equ	0800h
 NAMELEN		equ	12	; "DFILENAMEEXT" in FCB
+@FT		EQU	9	; File type
 ;
 bd_conout	equ	2
 bd_string	equ	9
@@ -33,18 +69,33 @@ bd_read		equ	20
 bd_write	equ	21
 bd_make		equ	22
 bd_setdma	equ	26
+bd_rndrd	equ	33
+bd_rndwr	equ	34
 bd_getsize	equ	35
 bd_setptr	equ	36
 ;
-PR1HEX		equ	0FFAAh
-PR2HEX		equ	0FFADh
-OSNEWL		equ	0FFE7h
+; These appear to be high memory ROM routines on Mr. Harston's
+; CP/M machine so they should be avoided.
+;PR1HEX		equ	0FFAAh
+;PR2HEX		equ	0FFADh
+;OSNEWL		equ	0FFE7h
+;
+global	ENVPTR,$MEMRY
+;
+	.request	dslib
+	extrn	timini,DOSTYP,DOSVER,TIMTYP,@BDOS,GSTAMP
+	extrn	U2MTIM
+;
+;	.request	zslib
+;	extrn	getstp,gstpcp
+;
+	.request	syslib		; sylib usually last
+;
+	cseg			; to read in .rel library routines
 
-	aseg
-	org   100h
 	jp    Start
 	db    'Z3ENV',1		; Z3 signiture
-Z3EAdr:	dw    0
+ENVPTR:	dw    0
 ;
 ; Code run once, could be overwritten
 Start:	ld   (OldStack),sp	; save old stack
@@ -52,6 +103,30 @@ Start:	ld   (OldStack),sp	; save old stack
 	ld   de,-CCPSIZE	; allow for CCP
 	add  hl,de
 	ld   sp,hl		; put stack at top of memory
+	ld	de,(ENVPTR)	; check for z-system
+	ld	a,d
+	or	e			 
+	jr	nz,strt
+	xor	a		; not running zsystem
+strt:	ld	(zflag),a	; clear flag
+	call	timini		; check for datestamping support
+	; Global variables returned:
+	; DOSTYP ='S'=>ZSDOS, 'D'=>Datestamper & '3'=>CP/M Plus.
+	;    0=>no datestamping
+	; DOSVER has version number, 22=>CP/M 2.2 and
+	; compatiblle. 11 for ZSDOS
+;
+; force zip extention if no extension given on command line
+	LD	A,(FCB1+@FT)	; See if any filetype was specified
+	CP	' '		;
+	JR	NZ,SKPZIP	; If so, leave it as is
+
+	LD	HL,'PI'		; Else inject a ".ZIP" extension
+	LD	(FCB1+@FT+1),HL	;
+	LD	A,'Z'		;
+	LD	(FCB1+@FT+0),A	;
+
+SKPZIP:
 	call Start0		; call main program
 Exit:	ld   sp,(OldStack)	; recover stack
 	ret
@@ -119,7 +194,7 @@ DeleteOk:
 ; do the copying.
 ; ARAGH!G!HG!I^%!&^$!^%#!!
 ;
-	LD   DE,MemStore	; HL=>heap to make list of names
+	LD   DE,($MEMRY)		; DE=>heap to make list of names
         LD   C,bd_sfirst
 ScanLoop:
 	PUSH BC
@@ -158,6 +233,11 @@ ScanDone:
 	LD   (InputBuffer),HL
 ;
 ; Open output file
+	ld	hl,FCB2
+	ld	de,FCB2+1
+	ld	bc,19
+	ld	(hl),0
+	ldir			; clear out FCB!
 	LD   DE,FCB1
 	LD   C,bd_sfirst	; Test for output file
 	CALL bdos
@@ -168,12 +248,20 @@ ScanDone:
 	CALL bdos
 	INC  A
 	JP   Z,ErrDirFull
+	ld	de,FCB1
+	ld	c,bd_open	; open output file
+	call	bdos
+	ld	de,DMA
+	ld	c,bd_setdma
+	call	bdos
+	ld	de,FCB1
+	ld	c,bd_rndwr	; write anything don't inc CR
 ; Can no longer use FCB2 as it is now the metadata for FCB1
 
 ;
 ; Now go through list of names
 FileStart:
-	LD   HL,MemStore	; HL=>heap to make list of names
+	LD   HL,($MEMRY)	; HL=>heap to make list of names
 FileLoop:
 	LD   A,(HL)		; HL=>filename
 	INC  A
@@ -187,7 +275,11 @@ FileLoop:
 	LD   BC,HeaderEnd-Header-1
 	LD   (HL),0
 	LDIR
+	 if  SLR
+	ld	hl,'KP'		; PK little endian
+	 else
 	LD   HL,'PK'
+	 endif
 	LD   A,(Pass)
 	AND  A
 	JR   Z,FileData		; Pass=0, data segment
@@ -205,31 +297,46 @@ FileData:
 	JP   Z,ShutTooManyFiles
 	LD   HL,HdrName		; HL=>name store in header
 FileDataGo:
+;  Move filename in FCB3 to Local Header, print it and get
+;  length for Local Header in BC.  Note original code needed
+;  FCB3 to be far enough away from record boundry and
+;  could not be made relocatable.  Thus, it has been
+;  rewritten so that absolute addresses not needed at
+;  assembly time.
 	LD   DE,FCB3+1		; DE=>name in FCB3
-	LD   BC,0		; BC= Filename length
+;	LD   BC,0		; BC= Filename length
+	ld	b,11		; up to 11 chars to process
+	ld	c,0		; filename length
 NameLoop:
-	LD   A,E
-	SUB  FCB3 AND 255
-	CP   12
-	JR   Z,NameDone		; All 12 chars done
-	CP   9
-	CALL Z,NameDot		; Insert dot
+;	LD   A,E
+	ld	a,b		; characters output so far
+;	SUB  FCB3 AND 255	; doesn't work in CSEG since
+;				; FCB3 is in DSEG
+;	CP   12
+	cp	3		; finished with name?
+;	JR   Z,NameDone		; All 12 chars done
+;	CP   9
+	CALL Z,NameDot		; If yes, Insert dot & start on ext.
 	LD   A,(DE)
 	INC  DE
-	CP   ' '
-	JR   Z,NameLoop		; Truncate spaces
+;	CP   ' '
+;	JR   Z,NameLoop		; Truncate spaces
 	CALL NamePut
-	JR   NameLoop
+	djnz	NameLoop
+	jr	NameDone
 NameDot:
 	LD   A,(DE)
 	CP   '!'
 	LD   A,'.'
 	RET  C			; Don't output dot if no extension
 NamePut:
+	cp	' '
+	ret	z		; remove whitespace
 	LD   (HL),A		; Store it in header
 	CALL PRCHAR		; Print character
 	INC  HL
-	INC  BC
+;	INC  BC
+	inc	c
 	RET
 NameDone:
 	LD   (HdrNameSz),BC	; Store name size
@@ -261,6 +368,40 @@ NameDone:
 	CALL bdos
 	INC  A
 	JP   Z,ShutInputFailed
+;
+; Now that input file is open, get the modify date/time stamp.
+;   For CP/M Plus, the date stamp is 4 bytes. 2 bytes for days
+;   since 1978 and 2 bytes of bcd Hours and minutes.  For CP/M
+;   2.2 /w Datestamper or ZSDOS, the stamp is 5 bytes of
+;   bcd year, month, day, hour, & minutes.  ZIP files
+;   use the MS-DOS 32 bit packed binary format. Time is 16-bits 
+;   with Bits [15:11] = hour, Bits [10:5]  = minutes and
+;   Bits [4:0]  = seconds/2 (not displayed).  Date is 16-bits
+;   with Bits [15:9] = year - 1980, Bits [8:5] = month and
+;   Bits [4:0] = day. Datestamp is stored little endian so time
+;   comes first then date.  The DSLIB routine GSTAMP will return
+;   either CP/M Plus or Datestamper stamps in Datestamp format, 
+;   while U2MTIM will convert Datestamper to MS-DOS format . 
+;   (Note ZSDOS can use CP/M style date stamping but returns 
+;   stamp in Datestamper format).    
+;   QPM, DOSPlus or Z80DOS stamping are not supported at this
+;   time.
+;
+; copy FCB because CP/M Plus returns date in the FCB
+	ld	hl,FCB3
+	ld	de,FCB4
+	ld	bc,36
+	ldir
+	ld	de,FCB4
+	ld	hl,dsbuf
+	call	gstamp
+	jr	z,NoDS		; no dsatestamp found
+; convert packed bcd modify time to MS-DOS fornat.  Note:
+; CP/M date stamps have no seconds.
+	ld	de,dsbuf+10	; point to modify stamp
+	ld	hl,HdrTime	; put MS-DOS time in header
+	call	U2MTIM		; convert stamp to MS-DOS
+NoDS:
 	LD   HL,0
 	LD   (FCB3PTR+0),HL	; Set PTR to zero
 	LD   (FCB3PTR+2),HL
@@ -305,19 +446,34 @@ CopyEOF:
 	JP   FileLoop
 
 FilesDone:
+; At the end of pass zero, all files with local
+; headers have been written.  In the next pass through
+; the file, we need to build the central directory by
+; rewinding the output file, adding file location info
+; and writing expanded header info to the central
+; directory.  This again requires hoping back and forth
+; from the central directory and the local headers as
+; we progrss down the output file.
+
 	LD   A,16
 	LD   (Options),A	; On second pass, set to [Q]uiet
 	LD   A,(Pass)
-	AND  A
+	AND  A			; end of pass zer0?
 	CALL Z,SavePTR		; Save pointer to end of data/start of directory
 	CALL Z,ConvertPTR	; Convert saved PTR to absolute offset
+				;   for use in central directory
 	INC  A
-	LD   (Pass),A
+	LD   (Pass),A		; increment pass flag
 	CP   2
-	JP   C,FileStart	; Do two passes
+	JP   C,FileStart	; Do two passes only
 
-; Create EOF header
+; Central directory now written so we need to Create END of
+;   Central Direcotry Header
+	 if	SLR
+	ld	hl,'KP'		; Put signiture in
+	 else
 	LD   HL,'PK'		; Put signiture in
+	 endif
 	LD   (EOFSig+0),HL
 	LD   HL,0605h
 	LD   (EOFSig+2),HL
@@ -454,68 +610,91 @@ SaveData3:
 	LD   (HdrCRC+2),HL
 	EXX
 	RET
-
+;
+; ConvertPTR -- convert the saved random record field
+;   to number of bytes from the beginning of the
+;   output file.  Four byte result saved at SavedPTR.
+;   Uses A, HL & DE.  Preserves CPU Flags
+;
 ConvertPTR:
-	PUSH AF
+	PUSH AF			; preserve flag
 	LD   A,(FCB1Saved+4)
 	LD   DE,(FCB1Saved+0)
 	LD   HL,(FCB1Saved+2)
 	ADD  A,A
 	LD   E,A
-	SRL  H
+	SRL  H			; shift HLDE right
 	RR   L
 	RR   D
 	RR   E			; HLDE=records*128+Offset
-	LD   (SavedPTR+0),DE
+	LD   (SavedPTR+0),DE	; save result
 	LD   (SavedPTR+2),HL
-	POP  AF
+	POP  AF			; restore flags
 	RET
-
+; Save PTR - Save the current location in the zip file for later
+; return.  Location is saved by using the random record field of
+; the FCB.  BDOS function 36 is used set the field.  This three
+; byte field is then saved for later use by RestorPTR & ConverPTR.
+; Preserves AF & HL.
+;
 SavePTR:
-	PUSH AF
+	PUSH AF			; preserve AF & HL
 	PUSH HL
-	LD   HL,(FCB1PTR+0)
+	LD   DE,FCB1
+	LD   C,bd_setptr
+	CALL bdos		; Set randpm record field
+	LD   HL,(FCB1PTR+0)	;save CR & R0
 	LD   (FCB1Saved+0),HL
-	LD   HL,(FCB1PTR+2)
+	LD   HL,(FCB1PTR+2)	; save R1 & R2
 	LD   (FCB1Saved+2),HL
 	LD   A,(OutputOffset)
 	LD   (FCB1Saved+4),A
 	POP  HL
 	POP  AF
 	RET
-
+;
+; RestorePTR - Move to location in zip file saved by SavePTR.  
+; Also saves the current location and moves file access to the 
+; location using a random read.  Since random read doesn't
+; change the record pointer, subsequent sequential reads or
+; writes occur at the same location.  Preserves DE & HL.
+;
 RestorePTR:
         PUSH HL
         PUSH DE
-	LD   HL,(FCB1PTR+0)
-	PUSH HL
+	LD   DE,FCB1
+	LD   C,bd_setptr
+	CALL bdos		; Set randpm record field
+	LD   HL,(FCB1PTR+0)	; push current random record &
+	PUSH HL			; OutputOffset on stack
 	LD   HL,(FCB1PTR+2)
 	PUSH HL
 	LD   A,(OutputOffset)
 	PUSH AF
-	CALL FlushSave		; Flush buffer to disk
-	LD   HL,(FCB1Saved+0)
-	LD   (FCB1PTR+0),HL
+	or	a
+	jr	z,RPTR0
+	ld	de,(OutputBuffer) ; random write OutputBuffer
+	ld	c,bd_setdma	; if offset not zero
+	call	bdos
+	ld	de,FCB1
+	ld	c,bd_rndwr
+	call	bdos
+RPTR0:
+	LD   HL,(FCB1Saved+0)	; get saved random record field
+	LD   (FCB1PTR+0),HL	; and put it into the FCB
 	LD   HL,(FCB1Saved+2)
 	LD   (FCB1PTR+2),HL
+	ld	de,(OutputBuffer) ; fill buffer
+	ld	c,bd_setdma
+	call	bdos
 	LD   DE,FCB1
-	LD   C,bd_setptr
-	CALL bdos		; Set file pointer
-	LD   DE,FCB1
-	LD   C,bd_read
-	CALL bdos		; Read current sector
-	LD   HL,(FCB1Saved+0)
-	LD   (FCB1PTR+0),HL
-	LD   HL,(FCB1Saved+2)
-	LD   (FCB1PTR+2),HL
-	LD   DE,FCB1
-	LD   C,bd_setptr
-	CALL bdos		; Set file pointer again
+	LD   C,bd_rndrd		; using random read
+	CALL bdos
 	LD   A,(FCB1Saved+4)
 	LD   (OutputOffset),A	; and set offset within buffer
 	POP  AF
 	LD   (FCB1Saved+4),A
-	POP  HL
+	POP  HL			; save current location
 	LD   (FCB1Saved+2),HL
 	POP  HL
 	LD   (FCB1Saved+0),HL
@@ -606,6 +785,8 @@ MsgAbort:
         CALL bdos
         JP   Exit
 
+;	dseg
+
 ; Initialised data
 MsgSyntax:
 	DEFM "ZIP    v"
@@ -656,7 +837,11 @@ MsgSyntax:
 	defb	'-','0'+((VersYY / 1000) mod 10),'0'+((VersYY / 100) mod 10)
 	defb	'0'+((VersYY / 10) mod 10),'0'+(VersYY mod 10)
 	DEFM 10,13
-        DEFM "Usage: ZIP <zipfile>[.zip] <afsp> [OQ]",10,13
+        DEFM "Usage: ZIP <zipfile>name[.zip] <afn> [/OQ]",10,13
+	db	'Options:',13,10
+	db	'  Q - Quiet',13,10
+	db	'  O - Overwrite existing file',13,10
+	db	'  / - Print this helP',13,10
         DEFM "Eg: ZIP OUT.ZIP *.COM",10,13
         DEFM "    ZIP ALLFILES.ZIP *.*",10,13,"$"
 MsgAdding:
@@ -674,12 +859,15 @@ MsgTooManyFiles:
 MsgInputFailed:
 	DEFM 10,13,"Couldn't open input file",10,13,"$"
 
+$MEMRY:		DS	2
+
+	dseg
 
 ; Uninitialised data
 OldStack:	DEFW 0000h	; Also end of saved data
 ZeroStart:			; Start of area to be zeroed
 Pass:		DEFB 0		; 0=local list, 1=directory, 2=EOF
-Options:	DEFB 0
+Options:	DEFB 0		; command line options i.e. O and/or Q
 NumFiles:	DEFB 0		; Number of entries
 ;FileOffset:	DS   4		; Offset to data segment entry
 InputOffset:	DEFB 0		; Index into input buffer
@@ -688,11 +876,14 @@ InputBuffer:	DEFW 0000h	; Input buffer
 OutputBuffer:	DEFW 0000h	; Output buffer
 ZeroEnd:			; End of area to be zeroed on startup
 FCB3:		DEFS 36		; Input file control block
+FCB4:		ds	36	; Copy FCB3 here
 FCB3PTR		EQU  FCB3+32	; Input file pointer bytes
 FCB1SaveOffset	DEFS 1		; Saved output offset
 FCB1Saved	DEFS 5		; Saved output PTR
 SavedPTR	DEFS 4		; Saved absolute PTR to output file
-
+dsbuf		ds	128	; date stamp buffer
+zflag		ds	1	; Zsystem Flag
+;
 ; Central directory overlaps local header
 Directory:
 DirSig:		DS	2	; Header signature PK,&01,&02
@@ -732,8 +923,7 @@ EOFDirSize	EQU	Header+12 ; Size of central dir   4 bytes (OffsetEOF-OffsetDir)
 EOFDirOffset	EQU	Header+16 ; Offset to central dir 4 bytes (OffsetDir)
 EOFCommentSz	EQU	Header+20 ; Comment length        2 bytes (&0000)
 EOFEnd		EQU	Header+22
-
-MemStore:
+;
 ; This is a heap of all data used
 ; List of filenames read from source in 12-byte FCB format
 ; &FF terminator
