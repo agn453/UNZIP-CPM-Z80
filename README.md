@@ -74,7 +74,7 @@ zml zip101
 or
 
 ```
-zsm4 =zip101.zip
+zsm4 =zip101.z80
 link zip101
 ```
 
