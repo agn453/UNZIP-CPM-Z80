@@ -1,11 +1,21 @@
-# UNZIP for CP/M Z80
+# UNZIP and ZIP for CP/M Z80
 
-This is UNZIP for CP/M in Zilog Z80 assembler.
+This repository contains versions of UNZIP and ZIP for various flavours
+of CP/M written in Zilog Z80 assembler.
 
-**LATEST NEWS:**  CP/M version enhancements.
+Support has been added for the Deflate compression algorithm so that
+decompression of ZIP archive files created with MS-DOS PKzip 2.04g
+and Info-ZIP (the open-source version of ZIP that's used by
+Unix/Linux and included with Microsoft Windows and macOS)
+can now be extracted.
 
-The latest release is V1.5-7 (CP/M) or V1.8-7 (Z-system) and may be
-downloaded in CP/M library file format from -
+(Older versions of the CP/M UNZIP program from various CP/M archive
+sites can _only_ be used to unpack .ZIP files whose contents were
+added using the Compressed or Stored methods as used by
+PKZip for MS-DOS Version 1.x.)
+
+The latest UNZIP release is V1.5-7 (for CP/M) or V1.8-7 (with Z-system
+enhancements) and may be downloaded in CP/M library file format from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip157.lbr
 
@@ -18,15 +28,17 @@ and is available from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz04.lbr
 
-Support has been added for the Deflate algorithm (since V1.5-2 and V1.8-2)
-so that decompression of archives created with MS-DOS PKzip 2.04g
-and Info-ZIP (the open-source version of ZIP that's used by
-Unix/Linux and included with Microsoft Windows and macOS)
-can now be extracted.
+A version to create ZIP files natively under CP/M  (using the Stored method
+and no file compression) was recently added to this repository by Jonathon
+Harston.  You can get it from 
 
-(Older versions of the CP/M UNZIP program can _only_ be used to unpack
-ZIP files whose contents have been compressed or stored by PKZip for
-MS-DOS Version 1.x.)
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/zip101.lbr
+
+Transfer these .LBR files to your CP/M system, then use a program like NULU[^3]
+to extract their contents.  Some of the extracted files may be compressed
+as indicated when the second file type character is a ```Q``` (squeezed),
+```Y``` (Limpel-Ziv-Welch or LZH compressed) or ```Z``` (crunched).
+You'll need to use the appropriate decompression tool[^4] to decompress them.
 
 
 ## Bug Fixes and Enhancements
@@ -47,7 +59,7 @@ the central directory was correct so on PCs or Macs all files could be
 extracted.
 
 * Added the ability to get file modification date from CP/M Plus and
-CP/M 2.2 using routines from the Zsystem libraries DSLIB and ZSLIB.
+CP/M 2.2 using routines from the Z-system libraries DSLIB and ZSLIB.
 This necessitated making the code relocatable.
 
 The updated version is ZIP101.  You can download the full distribution
@@ -420,5 +432,16 @@ are _not fixed_.
 [^1]: The source-code, documentation and executable for the ZSM4 Z80/Z180/Z280 Macro Assembler may be obtained from
   https://github.com/hperaza/ZSM4
 
-[^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler and Linker for Zsystem program development.  You can download a ZIP file distribution of it from
+[^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler and Linker for Z-system program development.  You can download a ZIP file distribution of it from
   http://www.cpm.z80.de/develop/zmac.zip
+
+[^3]: A copy of the CP/M library file extraction tool
+  [NULU.COM](https://raw.githubusercontent.com/agn454/Z280RC/master/utilities/NULU.COM) - the full distribution for which can be downloded from
+  [NULU152A.LBR](http://cpmarchives.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/arc-lbr/nulu152a.lbr)
+
+[^4]: CP/M native tools for decompressing are LT31.COM (which will extract and
+uncrunch/unsqueeze/unLZH directly from .LBR file members) available in
+  [LT31.LBR](http://cpmarchives.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/arc-lbr/lt31.lbr)
+  or UCRLZH20.COM available in
+  [CRLZG20.LBR](http://www.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/squsq/crlzh20.lbr).
+
