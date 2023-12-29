@@ -28,7 +28,7 @@ and is available from -
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz04.lbr
 
-A version to create ZIP files natively under CP/M  (using the Stored method
+A utility to create ZIP files natively under CP/M  (using the Stored method
 and no file compression) was recently added to this repository by Jonathon
 Harston.  You can get it from 
 
@@ -435,13 +435,14 @@ are _not fixed_.
 [^2]: Alex Hawley's ZMAC & ZML are the traditional mainstay Z80 Assembler and Linker for Z-system program development.  You can download a ZIP file distribution of it from
   http://www.cpm.z80.de/develop/zmac.zip
 
-[^3]: A copy of the CP/M library file extraction tool
-  [NULU.COM](https://raw.githubusercontent.com/agn454/Z280RC/master/utilities/NULU.COM) - the full distribution for which can be downloded from
+[^3]: A copy of the CP/M library file extraction tool NULU.COM may be downloaded
+  [here](https://raw.githubusercontent.com/agn454/Z280RC/master/utilities/NULU.COM)
+  or the full NULU distribution can be downloded from the cpmarchives site as
   [NULU152A.LBR](http://cpmarchives.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/arc-lbr/nulu152a.lbr)
 
 [^4]: CP/M native tools for decompressing are LT31.COM (which will extract and
 uncrunch/unsqueeze/unLZH directly from .LBR file members) available in
   [LT31.LBR](http://cpmarchives.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/arc-lbr/lt31.lbr)
   or UCRLZH20.COM available in
-  [CRLZG20.LBR](http://www.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/squsq/crlzh20.lbr).
+  [CRLZH20.LBR](http://www.classiccmp.org/cpm/Software/WalnutCD/cpm/utils/squsq/crlzh20.lbr).
 
