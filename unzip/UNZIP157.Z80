@@ -412,8 +412,7 @@ pcfhl2:	push	bc
 	pop	hl
 	call	skpstring	; skip past extra field
 	pop	hl
-	call	skpstring	; skip past file comment
-	ret
+	jp	skpstring	; skip past file comment
 endif
 ;
 ; pecd - skip past end-of-central-directory
@@ -426,8 +425,7 @@ pecdl:	push	bc
 	pop	bc
 	djnz	pecdl
 	call	getword		; comment length
-	call	skpstring	; skip past comment
-	ret
+	jp	skpstring	; skip past comment
 endif
 ;
 ; plfh - read local file header, then extract/check file
