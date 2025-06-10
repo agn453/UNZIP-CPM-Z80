@@ -1,3 +1,9 @@
+                                CPMZip 1.5
+                                ==========
+                          J.G.Harston  2000-2023
+	      mdfs.net/Apps/Archivers/CPMZip - jgh@mdfs.net
+		70 Camm Street, Walkley, Sheffield S6 3TR
+
 Introduction
 ------------
 ZIP archiving is probably the most common method of archiving files, and
@@ -7,9 +13,9 @@ programs that allow you to create, extract and examine ZIP archives.
 The supplied programs are ZIP, UNZIP and ZIPDIR. They perform the following
 actions:
 
-    ZIPDIR  - v1.50 - Lists the contents of a ZIP file
-    UNZIP   - v1.56 - Extracts stored files from a ZIP file
-    ZIP     - v1.00 - Creates ZIP file, storing files
+   ZIPDIR - v1.50 - Lists the contents of a ZIP file
+   UNZIP  - v1.57 - Extracts store/shrink/reduce/deflate files from a ZIP file
+   ZIP    - v1.01 - Creates ZIP file, storing files
 
 Brief usage details
 -------------------
@@ -28,8 +34,8 @@ Brief usage details
    O		Overwrite any existing output file.
    Q		Quiet mode.
 
-If a command is run without any parameters, the usage information is displayed.
-Options are supplied in [square brackets].
+If a command is run without any parameters or just ?, the usage information is
+displayed. Options are supplied in [square brackets].
 
 ZIPDIR will pause every 23 lines and wait for a keypress. SPACE will display one
 more line, CTRL-C will abort, any other key will display another 23 lines.
@@ -80,9 +86,9 @@ A ZIP file consists of a series of entries in the following format:
 	extra field                    (variable size)
 	data                           (variable size)
 
-CP/M does not support subdirectories, so on extracting files and path
-is junked as though with the the InfoZip -j option. Filenames are
-forced to upper case and truncated to 8.3 filenames.
+CP/M does not support subdirectories, so on extracting files any path
+is junked as though with the InfoZip -j option. Filenames are forced
+to upper case and truncated to 8.3 filenames.
 
 CP/M does not support time/date stamps, so these are ignored. CPMZIP3
 supports time/date stamps on CP/M systems with date support such as

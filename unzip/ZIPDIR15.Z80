@@ -7,7 +7,9 @@
 
 Vers	equ	150
 VersDD	equ	20
-VersMM	equ	02
+VersM1	equ	'F'
+VersM2	equ	'e'
+VersM3	equ	'b'
 VersYY	equ	2021
 
 ; v1.5 20 Feb 2021, General tidying up.
@@ -183,7 +185,7 @@ Z3CRT:	LD	(LPSCT),A	; Init lines per screen counter
 	CP	' '		;
 	JR	NZ,SKPZIP	; If so, leave it as is
 
-	LD	HL,'IP'		; Else inject a ".ZIP" extension
+	LD	HL,('P' shl 8)+'I' ; Else inject a ".ZIP" extension
 	LD	(FCB+@FT+1),HL	;
 	LD	A,'Z'		;
 	LD	(FCB+@FT+0),A	;
@@ -1311,14 +1313,11 @@ NSMSG:	DB	'Zipfile not found.',0
 
 USAGE:	DB	'ZIPDIR v'
 	DB	(Vers/100)+'0','.',((Vers/10) mod 10)+'0'
-	DB	(Vers mod 10)+'0'
-	DB	' - JGH '
-	DB	(VersDD/10)+'0',(VersDD mod 10)+'0'
-	DB	'/'
-	DB	(VersMM/10)+'0',(VersMM mod 10)+'0'
-	DB	'/'
-	DB	(VersYY/1000)+'0',((VersYY/100) mod 10)+'0'
-	DB	((VersYY/10) mod 10)+'0',(VersYY mod 10)+'0'
+	DB	(Vers mod 10)+'0',' - JGH '
+        DB	'0'+(VersDD / 10),'0'+(VersDD MOD 10),'-'
+	DB	VersM1,VersM2,VersM3
+	DB	"-",'0'+((VersYY / 1000) MOD 10),'0'+((VersYY / 100) MOD 10)
+	DB	'0'+((VersYY / 10) MOD 10),'0'+(VersYY MOD 10)
 	DB	CR,LF
 	DB	'Usage: ZIPDIR ',0
 USAGE2:	DB	'[du:]',0

@@ -11,7 +11,9 @@
 ;
 Vers		equ	100
 VersDD		equ	06
-VersMM		equ	11
+VersM1		equ	'N'
+VersM2		equ	'o'
+VersM3		equ	'v'
 VersYY		equ	2000
 ;
 bdos		equ	0005h
@@ -40,7 +42,6 @@ PR1HEX		equ	0FFAAh
 PR2HEX		equ	0FFADh
 OSNEWL		equ	0FFE7h
 
-	aseg
 	org   100h
 	jp    Start
 	db    'Z3ENV',1		; Z3 signiture
@@ -117,7 +118,7 @@ DeleteOk:
 ; GRRRRR Any call to bd_make kills FindFirst and FindNext
 ; So, have to build up a list of source files first, and then
 ; do the copying.
-; ARAGH!G!HG!I^%!&^$!^%#!!
+; ARAGH!G!HG!I^%!&^$!^%£!!
 ;
 	LD   DE,MemStore	; HL=>heap to make list of names
         LD   C,bd_sfirst
@@ -209,7 +210,7 @@ FileDataGo:
 	LD   BC,0		; BC= Filename length
 NameLoop:
 	LD   A,E
-	SUB  FCB3 AND 255
+	SUB  FCB3 & 255
 	CP   12
 	JR   Z,NameDone		; All 12 chars done
 	CP   9
@@ -611,50 +612,10 @@ MsgSyntax:
 	DEFM "ZIP    v"
 	DEFB '0'+((Vers / 100) MOD 10),'.'
 	DEFB '0'+((Vers / 10) MOD 10),'0'+(Vers MOD 10)," - JGH "
-; convert VersDD, VersMM, VersYY to date string in dd-mmm-yyyy format
-	defb	'0'+(VersDD / 10),'0'+(VersDD mod 10),'-'
-	if (VersMM lt 1) or (VersMM gt 12)
-	  defb	'xxx'
-	else
-	  if VersMM eq 1
-	    defb	'Jan'
-	  endif
-	  if VersMM eq 2
-	    defb	'Feb'
-	  endif
-	  if VersMM eq 3
-	    defb	'Mar'
-	  endif
-	  if VersMM eq 4
-	    defb	'Apr'
-	  endif
-	  if VersMM eq 5
-	    defb	'May'
-	  endif
-	  if VersMM eq 6
-	    defb	'Jun'
-	  endif
-	  if VersMM eq 7
-	    defb	'Jul'
-	  endif
-	  if VersMM eq 8
-	    defb	'Aug'
-	  endif
-	  if VersMM eq 9
-	    defb	'Sep'
-	  endif
-	  if VersMM eq 10
-	    defb	'Oct'
-	  endif
-	  if VersMM eq 11
-	    defb	'Nov'
-	  endif
-	  if VersMM eq 12
-	    defb	'Dec'
-	  endif
-	endif
-	defb	'-','0'+((VersYY / 1000) mod 10),'0'+((VersYY / 100) mod 10)
-	defb	'0'+((VersYY / 10) mod 10),'0'+(VersYY mod 10)
+        DEFB '0'+(VersDD / 10),'0'+(VersDD MOD 10),'-'
+        DEFB VersM1,VersM2,VersM3
+	DEFB "-",'0'+((VersYY / 1000) MOD 10),'0'+((VersYY / 100) MOD 10)
+	DEFB '0'+((VersYY / 10) MOD 10),'0'+(VersYY MOD 10)
 	DEFM 10,13
         DEFM "Usage: ZIP <zipfile>[.zip] <afsp> [OQ]",10,13
         DEFM "Eg: ZIP OUT.ZIP *.COM",10,13

@@ -8,10 +8,13 @@
 FASTQUIT  equ	1	; Quit as soon as end of data section
 CCPQUIT   equ   1	; Returns to CCP instead of WARM
 
+
 Vers	equ	15
 Revisn	equ	6		;;v1.5-6
 VersDD	equ	27
-VersMM	equ	08
+VersM1	equ	'A'
+VersM2	equ	'u'
+VersM3	equ	'g'
 VersYY	equ	2023
 
 ;
@@ -2421,50 +2424,10 @@ usage:	call	ilprt0
 	DB 'UNZIP  v'
 	DB Vers/10+'0','.',Vers mod 10+'0'
 	DB Revisn mod 10+'0',' - JGH '
-; convert VersDD, VersMM, VersYY to date string in dd-mmm-yyyy format
-	defb	'0'+(VersDD / 10),'0'+(VersDD mod 10),'-'
-	if (VersMM lt 1) or (VersMM gt 12)
-	  defb	'xxx'
-	else
-	  if VersMM eq 1
-	    defb	'Jan'
-	  endif
-	  if VersMM eq 2
-	    defb	'Feb'
-	  endif
-	  if VersMM eq 3
-	    defb	'Mar'
-	  endif
-	  if VersMM eq 4
-	    defb	'Apr'
-	  endif
-	  if VersMM eq 5
-	    defb	'May'
-	  endif
-	  if VersMM eq 6
-	    defb	'Jun'
-	  endif
-	  if VersMM eq 7
-	    defb	'Jul'
-	  endif
-	  if VersMM eq 8
-	    defb	'Aug'
-	  endif
-	  if VersMM eq 9
-	    defb	'Sep'
-	  endif
-	  if VersMM eq 10
-	    defb	'Oct'
-	  endif
-	  if VersMM eq 11
-	    defb	'Nov'
-	  endif
-	  if VersMM eq 12
-	    defb	'Dec'
-	  endif
-	endif
-	defb	'-','0'+((VersYY / 1000) mod 10),'0'+((VersYY / 100) mod 10)
-	defb	'0'+((VersYY / 10) mod 10),'0'+(VersYY mod 10)
+        DB '0'+(VersDD / 10),'0'+(VersDD MOD 10),'-'
+	DB VersM1,VersM2,VersM3
+	DB "-",'0'+((VersYY / 1000) MOD 10),'0'+((VersYY / 100) MOD 10)
+	DB '0'+((VersYY / 10) MOD 10),'0'+(VersYY MOD 10)
 	DB CR,LF,'Usage: '
 	DB 'UNZIP {d',0
 	ld	hl,(Z3EAdr)
