@@ -45,6 +45,14 @@ You'll need to use the appropriate decompression tool[^4] to decompress them.
 
 In reverse chronological order.
 
+### June 11, 2025
+
+Jonathon Harston did some minor tidying up of the source files for
+UNZIP156, UNZIP157, ZIP100, ZIP101 and ZIPDIR15.  His changes have been
+merged and the respective library files (containing the source and CP/M
+binary) have been updated.
+
+
 ### December 28, 2023
 
 Lars Nelson has provided the following updates to Jonathon Harston's
