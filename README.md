@@ -76,7 +76,7 @@ corrupting program variables).
 called UNZIPC that's loaded after the program and library modules
 DSEG segment.
 
-* Code optimisated to print a space (saves a few bytes in CSEG)
+* Code optimised to print a space (saves a few bytes in CSEG)
 and use strings with bit 7 set when printing with vprint.
 
 * Remove Z-System highlighting from usage string.
