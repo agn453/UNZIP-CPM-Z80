@@ -23,10 +23,10 @@ or
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip187.lbr
 
-Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.4-1
+Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.5-1
 and is available from -
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz04.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz51.lbr
 
 A utility to create ZIP files natively under CP/M  (using the Stored method
 and no file compression) was recently added to this repository by Jonathon
@@ -44,6 +44,49 @@ You'll need to use the appropriate decompression tool[^4] to decompress them.
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### August 18, 2026
+
+Richard Murray reported an issue #18 with Simeon Cran's Z-System
+UNZIPZ4.COM causing a memory corruption when date stamping an
+extracted file.  Upon examination into this issue, many more
+were found with the code.  These have now been remedied and the
+updated version v0.5-1 is available from 
+[UNZIPZ51.COM](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/UNZIPZ51.COM)
+and the updated source file from
+[UNZIPZ51.Z80](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/UNZIPZ51.Z80).
+
+The fixes include
+
+* Force extracted CP/M filenames to uppercase.
+
+* Correct setting default file type of .ZIP (M80 misassembled 16-bit
+load immediate instruction with bracketed expression).
+
+* Correct testing for // - the standard Z-System switch for displaying
+usage (M80 misassembled).
+
+* Fix column output misalignment when reporting an existing file.
+
+* No longer use external DSEG defines/equates instead define them
+in the single source file (linker was overlaying library DSEG usage
+corrupting program variables).
+
+* Put uninitialised variables and workspace in a COMMON area
+called UNZIPC that's loaded after the program and library modules
+DSEG segment.
+
+* Code optimisated to print a space (saves a few bytes in CSEG)
+and use strings with bit 7 set when printing with vprint.
+
+* Remove Z-System highlighting from usage string.
+
+* Print the top of COMMON usage in hexadecimal with the sign-on banner.
+
+The updated source and binaries are also available in the LBR file -
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz51.lbr
+
 
 ### June 11, 2025
 
