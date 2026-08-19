@@ -23,10 +23,10 @@ or
 
 https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzip187.lbr
 
-Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.5-1
+Simeon Cran's version (UNZIPZ) for Z-system has also been updated as V0.5-2
 and is available from -
 
-https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz51.lbr
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz52.lbr
 
 A utility to create ZIP files natively under CP/M  (using the Stored method
 and no file compression) was recently added to this repository by Jonathon
@@ -44,6 +44,33 @@ You'll need to use the appropriate decompression tool[^4] to decompress them.
 ## Bug Fixes and Enhancements
 
 In reverse chronological order.
+
+### August 19, 2026
+
+Some more bug fixes to Simeon Cran's Z-System UNZIPZ51.COM by Richard
+Murray and myself.
+
+* Fix Local File Header space to allow for extra NUL byte terminator.
+
+* The library calls to sstpcp (and presumably pstamp) were clearing
+the output file FCB drive/user byte after setting the timestamp
+under CP/M Plus/ZPM3.
+
+* Ensure current user is the output file user prior to calling
+sstpcp library routine to set CP/M Plus timestamp.
+
+* Check status from sstpcp under CP/M Plus to see if the output
+drive has timestamping enabled and skip trying to set the extracted
+file timestamps if it's not.
+
+The latest version 0.5-2 is in
+[UNZIPZ52.COM](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/UNZIPZ52.COM)
+and the updated source file is
+[UNZIPZ52.Z80](https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/UNZIPZ52.Z80),
+with all files to rebuild it in the LBR file at
+
+https://raw.githubusercontent.com/agn453/UNZIP-CPM-Z80/master/unzip/unzipz52.lbr
+
 
 ### August 18, 2026
 
