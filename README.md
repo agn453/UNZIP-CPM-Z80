@@ -45,6 +45,11 @@ You'll need to use the appropriate decompression tool[^4] to decompress them.
 
 In reverse chronological order.
 
+### August 20, 2026
+
+Cosmetic fix to typos and attributions in the UNZIPZ52.Z80 source file.
+
+
 ### August 19, 2026
 
 Some more bug fixes to Simeon Cran's Z-System UNZIPZ51.COM by Richard

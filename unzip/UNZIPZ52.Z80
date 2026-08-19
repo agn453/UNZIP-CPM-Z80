@@ -1,4 +1,4 @@
-; UNZIPZ.Z80
+; UNZIPZ52.Z80
 ;
 ;		Z-System UNZIPPER
 ;	Dissolves all MS-DOS Zip files
@@ -13,6 +13,7 @@ Revisn	equ	2		;;v0.5-2
 ;
 ; (Preferred)
 ; Alex Hawley's Z-System ZMAC/ZML
+; (available from http://www.cpm.z80.de/develop/zmac.zip)
 ;
 ; NB: Must be run under Z-System environment (e.g. Z3PLUS)
 ; The resulting .COM file includes only the CSEG and DSEG
@@ -54,7 +55,7 @@ Revisn	equ	2		;;v0.5-2
 ; Modification History
 ; ====================
 ;
-; Version 0.5-2 -- August 19,2026 -- Richard Murrray & Tony Nicholson
+; Version 0.5-2 -- August 19,2026 -- Richard Murray & Tony Nicholson
 ;	Fix Local File Header space to allow for extra NUL
 ;	byte terminator.
 ;	The library calls to sstpcp (and presumably pstamp)
@@ -92,8 +93,9 @@ Revisn	equ	2		;;v0.5-2
 ; Version 0.5-0 -- August 13, 2026 -- Tony Nicholson
 ;	Bug fix for memory corruption when setting an extracted
 ;	file's timestamp - as reported by Richard Murray.
+;	(This version was not published on GitHub due to issues)
 ;
-; Version 0.4-1 -- December 7, 2020 -- Lars
+; Version 0.4-1 -- December 7, 2020 -- Lars Nelson
 ;	Incorporated more Russell Marks speed improvments
 ;	which further optimised the bit-readers.  These included
 ;	self-modifying code with an unrolled end loop 
@@ -102,7 +104,7 @@ Revisn	equ	2		;;v0.5-2
 ;	All speedups have resulted in a 45% improvement in 
 ;	speed compared to V0.3-4
 ;
-; Version 0.4-0 -- December 6, 2020 -- Lars
+; Version 0.4-0 -- December 6, 2020 -- Lars Nelson
 ;	Added speed improvements to the unDeflate algorithm
 ;	developed by Russell Marks.  First, a table-based CRC 
 ;	was implemented yielding a 20% speed improvement but 
@@ -116,16 +118,16 @@ Revisn	equ	2		;;v0.5-2
 ;	processing ZIPs created by 32 bit programs.  Cleaned
 ;	up output format.
 ;
-; Version 0.3-4 -- December 1, 2020 -- Lars
+; Version 0.3-4 -- December 1, 2020 -- Lars Nelson
 ;	Added print out of information in the local file header
 ;	thus completing one of Simeon Cran's uncompleted tasks.
 ;	Streamlined logic for processing files.
 ;
-; Version 0.3-3 -- November 22, 2020 -- Lars
+; Version 0.3-3 -- November 22, 2020 -- Lars Nelson
 ;	Added date stamping.  Date in local file header applied to
 ;	extracted file.
 ;
-; Version 0.3-2 -- September 3, 2020 -- Lars
+; Version 0.3-2 -- September 3, 2020 -- Lars Nelson
 ;	Major & minor Improvments plus bug fixes.
 ;	Fixed long filename problem due to directory paths in the filename
 ;	Added a local stack pointer.
@@ -133,7 +135,7 @@ Revisn	equ	2		;;v0.5-2
 ;	Keir Fraser's HiTech-C code at
 ;	https://github.com/keirf/Amiga-Stuff/blob/master/inflate/degzip_portable.c
 ;
-; Version 0.3-1 -- June 17, 2020 -- Lars
+; Version 0.3-1 -- June 17, 2020 -- Lars Nelson
 ;
 ;	Fixed bugs in the unshrink and unimplode algorithms
 ;	developed by Martin who was inspired by postings to 
@@ -153,7 +155,7 @@ Revisn	equ	2		;;v0.5-2
 ;	Both updates are flagged with ;;v0.3-1 comments, and the
 ;	version sign-on message now includes the revision.
 ;
-; Version 0.2-0 UNZIPZ -- 4/25/91 -- Simon Cran
+; Version 0.2-0 UNZIPZ -- 4/25/91 -- Simeon Cran
 ;
 ;The files in this archive are my Z-modified version of UNZIP 1.2.  
 ;by David P. Goodenough.  They consist of three files in order to 
